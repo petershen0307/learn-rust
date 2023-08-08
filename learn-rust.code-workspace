@@ -8,6 +8,9 @@
     },
     {
       "path": "ntfs"
+    },
+    {
+      "path": "rust-book"
     }
   ]
 }

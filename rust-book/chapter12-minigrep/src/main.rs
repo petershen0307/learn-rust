@@ -1,6 +1,8 @@
 use std::env;
 use std::process;
 
+//$env:IGNORE_CASE=1; cargo run -- who .\poem.txt;Remove-Item Env:\IGNORE_CASE
+//cargo run -- who .\poem.txt
 fn main() {
     let args: Vec<String> = env::args().collect();
 

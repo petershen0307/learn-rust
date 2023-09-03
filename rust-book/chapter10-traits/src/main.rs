@@ -1,7 +1,8 @@
 use chapter10_traits::{NewsArticle, Summary, Tweet};
 
 fn main() {
-    use_trait_in_parameter()
+    // use_trait_in_parameter();
+    traits_have_same_fn();
 }
 
 fn trait_example() {
@@ -52,4 +53,14 @@ pub fn use_trait_in_parameter() {
         retweet: false,
     };
     notify(&tweet);
+}
+
+fn traits_have_same_fn() {
+    let a = chapter10_traits::TraitsHaveSameFn {};
+    // the chapter10_traits::TraitsHaveSameFn definition won't show the error, it can declare like this. Only ambiguous usage will show the error
+    // when we only write `use chapter10_traits::Summary;`
+    // rust compiler only compile chapter10_traits::Summary implementation
+    // if we both write `use chapter10_traits::AnotherSummary;` at here, the rust compiler will show the ambiguous error.
+    // use chapter10_traits::AnotherSummary;
+    println!("{}", a.summarize_author());
 }

@@ -31,3 +31,21 @@ impl Summary for Tweet {
         format!("@{}", self.username)
     }
 }
+
+pub trait AnotherSummary {
+    fn summarize_author(&self) -> String;
+}
+
+pub struct TraitsHaveSameFn {}
+
+impl Summary for TraitsHaveSameFn {
+    fn summarize_author(&self) -> String {
+        String::from("TraitsHaveSameFn::Summary")
+    }
+}
+
+impl AnotherSummary for TraitsHaveSameFn {
+    fn summarize_author(&self) -> String {
+        String::from("TraitsHaveSameFn::AnotherSummary")
+    }
+}

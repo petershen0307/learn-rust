@@ -1,11 +1,11 @@
-use chapter10_traits::{NewsArticle, Summary, Tweet};
+mod sections;
+use sections::summary::Summary;
 
-fn main() {
-    // use_trait_in_parameter();
-    traits_have_same_fn();
-}
+fn main() {}
 
+#[test]
 fn trait_example() {
+    use sections::tweet::Tweet;
     let tweet = Tweet {
         username: String::from("horse_ebooks"),
         content: String::from("of course, as you probably already know, people"),
@@ -16,7 +16,9 @@ fn trait_example() {
     println!("1 new tweet: {}", tweet.summarize());
 }
 
+#[test]
 fn default_implementation() {
+    use sections::news_article::NewsArticle;
     let article = NewsArticle {
         headline: String::from("Penguins win the Stanley Cup Championship!"),
         location: String::from("Pittsburgh, PA, USA"),
@@ -30,7 +32,9 @@ fn default_implementation() {
     println!("New article available! {}", article.summarize());
 }
 
+#[test]
 fn default_implementation_interface() {
+    use sections::tweet::Tweet;
     let tweet = Tweet {
         username: String::from("horse_ebooks"),
         content: String::from("of course, as you probably already know, people"),
@@ -45,7 +49,9 @@ pub fn notify(item: &impl Summary) {
     println!("Breaking news! {}", item.summarize());
 }
 
-pub fn use_trait_in_parameter() {
+#[test]
+fn use_trait_in_parameter() {
+    use sections::tweet::Tweet;
     let tweet = Tweet {
         username: String::from("horse_ebooks"),
         content: String::from("of course, as you probably already know, people"),
@@ -55,12 +61,21 @@ pub fn use_trait_in_parameter() {
     notify(&tweet);
 }
 
+#[test]
 fn traits_have_same_fn() {
-    let a = chapter10_traits::TraitsHaveSameFn {};
+    use sections::test_trait_impl::TraitsHaveSameFn;
+    let a = TraitsHaveSameFn {};
     // the chapter10_traits::TraitsHaveSameFn definition won't show the error, it can declare like this. Only ambiguous usage will show the error
     // when we only write `use chapter10_traits::Summary;`
     // rust compiler only compile chapter10_traits::Summary implementation
     // if we both write `use chapter10_traits::AnotherSummary;` at here, the rust compiler will show the ambiguous error.
     // use chapter10_traits::AnotherSummary;
     println!("{}", a.summarize_author());
+}
+
+#[test]
+fn overwrite_default_impl() {
+    use crate::sections::test_trait_impl::OverWriteDefaultTraitImpl;
+    let a = OverWriteDefaultTraitImpl {};
+    println!("call summarize: {}", a.summarize())
 }

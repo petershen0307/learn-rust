@@ -49,3 +49,24 @@ fn no_capture() {
     closure();
     closure();
 }
+
+#[test]
+fn pass_fn_to_fn_mut_and_fn_once() {
+    let x = String::from("x");
+    let closure = || println!("in closure x={}", x);
+    closure();
+    closure();
+    fn_mut_trait_bound(closure);
+    fn_once_trait_bound(closure);
+}
+
+#[allow(dead_code)]
+fn fn_mut_trait_bound(mut f: impl FnMut() -> ()) {
+    print!("fn_mut_trait_bound: ");
+    f();
+}
+#[allow(dead_code)]
+fn fn_once_trait_bound(f: impl FnOnce() -> ()) {
+    print!("fn_once_trait_bound: ");
+    f();
+}

@@ -41,3 +41,11 @@ fn fn_string() {
     closure();
     println!("out of closure x={}", x);
 }
+
+#[test]
+fn no_capture() {
+    // it can write explicit type here for closure
+    let closure: fn() -> () = || println!("in closure without capture");
+    closure();
+    closure();
+}

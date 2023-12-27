@@ -70,7 +70,11 @@ fn traits_have_same_fn() {
     // rust compiler only compile chapter10_traits::Summary implementation
     // if we both write `use sections::summary::AnotherSummary;` at here, the rust compiler will show the ambiguous error.
     // use sections::summary::AnotherSummary;
-    println!("{}", a.summarize_author());
+
+    // the better way is to use fully qualified syntax
+    // https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#fully-qualified-syntax-for-disambiguation-calling-methods-with-the-same-name
+    println!("Summary::summarize_author={}", Summary::summarize_author(&a));
+    println!("AnotherSummary::summarize_author={}", sections::summary::AnotherSummary::summarize_author(&a));
 }
 
 #[test]

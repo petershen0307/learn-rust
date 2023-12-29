@@ -1,8 +1,8 @@
 # tcp listener
 
-1. write a blocking tcp listener
-2. try to use thread to achieve non-blocking handler
-3. try not to use thread to achieve non-blocking handler
+1. write tcp listener only serve one connection at once
+2. try to use thread to handle multiple connection
+3. try to use single thread to handle multiple connection
 4. tcp listener will wait 5 second and expect tcp client will send a message, if client didn't send the message, server send a message to client
 
 ```bash

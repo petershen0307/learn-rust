@@ -8,7 +8,9 @@ use std::{
 fn main() -> std::io::Result<()> {
     let tcp_listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     for stream in tcp_listener.incoming() {
-        handle_client(RefCell::new(stream?));
+        std::thread::spawn(||{
+            handle_client(RefCell::new(stream.unwrap()));
+        });
     }
     Ok(())
 }

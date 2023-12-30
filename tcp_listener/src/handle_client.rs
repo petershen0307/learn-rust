@@ -2,11 +2,6 @@ use std::io::{Read, Write};
 use std::{cell::RefCell, net::TcpStream, time::Duration};
 
 pub fn handle_client(stream: RefCell<TcpStream>) {
-    println!(
-        "received from ip:port={}:{}",
-        stream.borrow().peer_addr().unwrap().ip(),
-        stream.borrow().peer_addr().unwrap().port()
-    );
     loop {
         let mut buffer = [0; 1024];
         let read_size = match stream.borrow_mut().read(&mut buffer) {
@@ -24,7 +19,9 @@ pub fn handle_client(stream: RefCell<TcpStream>) {
             }
         };
         println!(
-            "read size={}; read message={}",
+            "received from ip:port={}:{}; read size={}; read message={}",
+            stream.borrow().peer_addr().unwrap().ip(),
+            stream.borrow().peer_addr().unwrap().port(),
             read_size,
             String::from_utf8_lossy(&buffer[..])
         );

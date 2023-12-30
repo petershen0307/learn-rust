@@ -5,6 +5,8 @@
 3. try to use single thread to handle multiple connection
 4. tcp listener will wait 5 second and expect tcp client will send a message, if client didn't send the message, server send a message to client
 
+additional, how to do the graceful shutdown in every challenge?
+
 ```bash
 # tcp server and client tool
 # client

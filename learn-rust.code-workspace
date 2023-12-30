@@ -13,7 +13,7 @@
       "path": "rust-book"
     },
     {
-      "path": "tcp-listener"
+      "path": "tcp_listener"
     }
   ]
 }

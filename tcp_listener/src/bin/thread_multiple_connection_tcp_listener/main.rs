@@ -28,32 +28,39 @@ fn main() -> std::io::Result<()> {
         .set_nonblocking(true)
         .expect("set nonblocking failed");
     let connection_count = Arc::new(Mutex::new(0));
-    for stream in tcp_listener.incoming() {
-        let shutdown_for_tcp_scream = Arc::clone(&shutdown_cloned);
-        let connection_count_tcp_stream = Arc::clone(&connection_count);
-        match stream {
-            Ok(s) => {
-                thread::spawn(move || {
-                    tcp_listener::handle_client::handle_client(
-                        RefCell::new(s),
-                        shutdown_for_tcp_scream,
-                        connection_count_tcp_stream,
-                    );
-                });
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                let shutdown = shutdown_cloned.lock().unwrap();
-                if *shutdown {
-                    println!("received shutdown event at TcpListener!");
-                    break;
+    {
+        // to enforce TcpListener will be dropped after received shutdown event
+        for stream in tcp_listener.incoming() {
+            let shutdown_for_tcp_scream = Arc::clone(&shutdown_cloned);
+            let connection_count_tcp_stream = Arc::clone(&connection_count);
+            match stream {
+                Ok(s) => {
+                    thread::spawn(move || {
+                        tcp_listener::handle_client::handle_client(
+                            RefCell::new(s),
+                            shutdown_for_tcp_scream,
+                            connection_count_tcp_stream,
+                        );
+                    });
                 }
-                thread::sleep(time::Duration::from_millis(50));
-                continue;
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    let shutdown = shutdown_cloned.lock().unwrap();
+                    if *shutdown {
+                        println!("received shutdown event at TcpListener!");
+                        break;
+                    }
+                    thread::sleep(time::Duration::from_millis(50));
+                    continue;
+                }
+                Err(e) => panic!("encountered IO error: {e}"),
             }
-            Err(e) => panic!("encountered IO error: {e}"),
         }
     }
     println!("graceful shutdown!");
+    {
+        let connection_count = connection_count.lock().unwrap();
+        println!("current connection count={}", (*connection_count));
+    }
     loop {
         let connection_count = connection_count.lock().unwrap();
         if (*connection_count) != 0 {

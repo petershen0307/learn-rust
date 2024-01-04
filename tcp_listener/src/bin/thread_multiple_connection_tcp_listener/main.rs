@@ -18,10 +18,12 @@ fn main() -> std::io::Result<()> {
                 SIGINT => {
                     let mut shutdown = shutdown.lock().unwrap();
                     *shutdown = true;
+                    break;
                 }
                 _ => unreachable!(),
             }
         }
+        println!("[{:?}] leave signal thread!", thread::current().id())
     });
     let tcp_listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     tcp_listener
@@ -44,10 +46,12 @@ fn main() -> std::io::Result<()> {
                     });
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    let shutdown = shutdown_cloned.lock().unwrap();
-                    if *shutdown {
-                        println!("received shutdown event at TcpListener!");
-                        break;
+                    {
+                        let shutdown = shutdown_cloned.lock().unwrap();
+                        if *shutdown {
+                            println!("received shutdown event at TcpListener!");
+                            break;
+                        }
                     }
                     thread::sleep(time::Duration::from_millis(50));
                     continue;
@@ -62,8 +66,12 @@ fn main() -> std::io::Result<()> {
         println!("current connection count={}", (*connection_count));
     }
     loop {
-        let connection_count = connection_count.lock().unwrap();
-        if (*connection_count) != 0 {
+        let go_to_sleep: bool;
+        {
+            let connection_count = connection_count.lock().unwrap();
+            go_to_sleep = (*connection_count) != 0
+        }
+        if go_to_sleep {
             thread::sleep(time::Duration::from_millis(50));
         } else {
             break;

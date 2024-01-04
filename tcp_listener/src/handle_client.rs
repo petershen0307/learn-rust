@@ -30,9 +30,14 @@ pub fn handle_client(
                 }
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                if *(shutdown.lock().unwrap()) {
-                    println!("received shutdown event at TcpStream!");
-                    break;
+                {
+                    if *(shutdown.lock().unwrap()) {
+                        println!(
+                            "[{:?}] received shutdown event at TcpStream!",
+                            thread::current().id()
+                        );
+                        break;
+                    }
                 }
                 thread::sleep(time::Duration::from_millis(50));
                 continue;
@@ -43,7 +48,8 @@ pub fn handle_client(
             }
         };
         println!(
-            "received from ip:port={}:{}; read size={}; read message={}",
+            "[{:?}] received from ip:port={}:{}; read size={}; read message={}",
+            thread::current().id(),
             stream.borrow().peer_addr().unwrap().ip(),
             stream.borrow().peer_addr().unwrap().port(),
             read_size,
@@ -57,19 +63,23 @@ pub fn handle_client(
         stream.borrow_mut().write(response.as_bytes()).unwrap();
     }
 
-    if *(shutdown.lock().unwrap()) {
-        stream
-            .borrow_mut()
-            .shutdown(net::Shutdown::Both)
-            .expect("tcp stream shutdown failed!");
+    {
+        if *(shutdown.lock().unwrap()) {
+            stream
+                .borrow_mut()
+                .shutdown(net::Shutdown::Both)
+                .expect("tcp stream shutdown failed!");
+        }
+    }
+    {
+        println!("[{:?}] before minus count", thread::current().id());
+        let mut connection_count = connection_count.lock().unwrap();
+        (*connection_count) -= 1;
+        println!("[{:?}] after minus count", thread::current().id());
     }
     println!(
         "close connection {}:{}",
         stream.borrow().peer_addr().unwrap().ip(),
         stream.borrow().peer_addr().unwrap().port()
     );
-    {
-        let mut connection_count = connection_count.lock().unwrap();
-        (*connection_count) -= 1;
-    }
 }

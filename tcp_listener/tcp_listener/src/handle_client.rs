@@ -8,6 +8,8 @@ use std::{
     thread, time,
 };
 
+use log::info;
+
 pub fn handle_client(
     stream: RefCell<TcpStream>,
     shutdown: Arc<Mutex<bool>>,
@@ -23,7 +25,7 @@ pub fn handle_client(
         let read_size = match stream.borrow_mut().read(&mut buffer) {
             Ok(i) => {
                 if i == 0 {
-                    println!("read 0");
+                    info!("read 0");
                     break;
                 } else {
                     i
@@ -32,7 +34,7 @@ pub fn handle_client(
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 {
                     if *(shutdown.lock().unwrap()) {
-                        println!(
+                        info!(
                             "[{:?}] received shutdown event at TcpStream!",
                             thread::current().id()
                         );
@@ -43,11 +45,11 @@ pub fn handle_client(
                 continue;
             }
             Err(err) => {
-                println!("read err={}", err);
+                info!("read err={}", err);
                 break;
             }
         };
-        println!(
+        info!(
             "[{:?}] received from ip:port={}:{}; read size={}; read message={}",
             thread::current().id(),
             stream.borrow().peer_addr().unwrap().ip(),
@@ -72,12 +74,12 @@ pub fn handle_client(
         }
     }
     {
-        println!("[{:?}] before minus count", thread::current().id());
+        info!("[{:?}] before minus count", thread::current().id());
         let mut connection_count = connection_count.lock().unwrap();
         (*connection_count) -= 1;
-        println!("[{:?}] after minus count", thread::current().id());
+        info!("[{:?}] after minus count", thread::current().id());
     }
-    println!(
+    info!(
         "close connection {}:{}",
         stream.borrow().peer_addr().unwrap().ip(),
         stream.borrow().peer_addr().unwrap().port()
@@ -99,7 +101,7 @@ pub async fn async_handle_client(
         let read_size = match stream.borrow_mut().read(&mut buffer) {
             Ok(i) => {
                 if i == 0 {
-                    println!("read 0");
+                    info!("read 0");
                     break;
                 } else {
                     i
@@ -108,7 +110,7 @@ pub async fn async_handle_client(
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 {
                     if *(shutdown.lock().unwrap()) {
-                        println!(
+                        info!(
                             "[{:?}] received shutdown event at TcpStream!",
                             thread::current().id()
                         );
@@ -119,11 +121,11 @@ pub async fn async_handle_client(
                 continue;
             }
             Err(err) => {
-                println!("read err={}", err);
+                info!("read err={}", err);
                 break;
             }
         };
-        println!(
+        info!(
             "[{:?}] received from ip:port={}:{}; read size={}; read message={}",
             thread::current().id(),
             stream.borrow().peer_addr().unwrap().ip(),
@@ -148,12 +150,12 @@ pub async fn async_handle_client(
         }
     }
     {
-        println!("[{:?}] before minus count", thread::current().id());
+        info!("[{:?}] before minus count", thread::current().id());
         let mut connection_count = connection_count.lock().unwrap();
         (*connection_count) -= 1;
-        println!("[{:?}] after minus count", thread::current().id());
+        info!("[{:?}] after minus count", thread::current().id());
     }
-    println!(
+    info!(
         "close connection {}:{}",
         stream.borrow().peer_addr().unwrap().ip(),
         stream.borrow().peer_addr().unwrap().port()
@@ -176,7 +178,7 @@ pub fn two_way_handle_client(
         let read_size = match stream.borrow_mut().read(&mut buffer) {
             Ok(i) => {
                 if i == 0 {
-                    println!("read 0");
+                    info!("read 0");
                     break;
                 } else {
                     i
@@ -185,7 +187,7 @@ pub fn two_way_handle_client(
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 {
                     if *(shutdown.read().unwrap()) {
-                        println!(
+                        info!(
                             "[{:?}] received shutdown event at TcpStream!",
                             thread::current().id()
                         );
@@ -196,7 +198,7 @@ pub fn two_way_handle_client(
                 0
             }
             Err(err) => {
-                println!("read err={}", err);
+                info!("read err={}", err);
                 break;
             }
         };
@@ -209,7 +211,7 @@ pub fn two_way_handle_client(
             }
         }
         if read_size != 0 {
-            println!(
+            info!(
                 "[{:?}] received from ip:port={}:{}; read size={}; read message={}",
                 thread::current().id(),
                 stream.borrow().peer_addr().unwrap().ip(),
@@ -234,12 +236,12 @@ pub fn two_way_handle_client(
         }
     }
     {
-        println!("[{:?}] before minus count", thread::current().id());
+        info!("[{:?}] before minus count", thread::current().id());
         let mut connection_count = connection_count.lock().unwrap();
         (*connection_count) -= 1;
-        println!("[{:?}] after minus count", thread::current().id());
+        info!("[{:?}] after minus count", thread::current().id());
     }
-    println!(
+    info!(
         "close connection {}:{}",
         stream.borrow().peer_addr().unwrap().ip(),
         stream.borrow().peer_addr().unwrap().port()

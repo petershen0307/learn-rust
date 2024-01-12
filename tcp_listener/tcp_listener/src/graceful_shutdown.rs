@@ -4,6 +4,8 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+use log::info;
+
 pub fn listen_sig_interrupt(shutdown: Arc<RwLock<bool>>) -> JoinHandle<()> {
     let mut signals = Signals::new(&[SIGINT]).unwrap();
     thread::spawn(move || {
@@ -17,6 +19,6 @@ pub fn listen_sig_interrupt(shutdown: Arc<RwLock<bool>>) -> JoinHandle<()> {
                 _ => unreachable!(),
             }
         }
-        println!("[{:?}] leave signal thread!", thread::current().id())
+        info!("[{:?}] leave signal thread!", thread::current().id())
     })
 }

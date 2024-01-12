@@ -6,9 +6,11 @@ use std::{
     thread, time,
 };
 
+use env_logger::Env;
 use signal_hook::{consts::SIGINT, iterator::Signals};
 
 fn main() -> std::io::Result<()> {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let shutdown = Arc::new(Mutex::new(false));
     let shutdown_cloned = Arc::clone(&shutdown);
     let mut signals = Signals::new(&[SIGINT])?;

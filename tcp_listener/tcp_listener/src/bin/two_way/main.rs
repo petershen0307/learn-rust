@@ -6,9 +6,13 @@ use std::{
     thread, time,
 };
 
-use tcp_listener::{graceful_shutdown, stdin};
+use env_logger::Env;
+use log::info;
 
+use tcp_listener::{graceful_shutdown, stdin};
 fn main() -> std::io::Result<()> {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+
     let shutdown = Arc::new(RwLock::new(false));
     graceful_shutdown::listen_sig_interrupt(Arc::clone(&shutdown));
 
@@ -47,7 +51,7 @@ fn listen_tcp_connection(buffer: Arc<RwLock<String>>, shutdown: Arc<RwLock<bool>
                     {
                         let shutdown = shutdown.read().unwrap();
                         if *shutdown {
-                            println!("received shutdown event at TcpListener!");
+                            info!("received shutdown event at TcpListener!");
                             break;
                         }
                     }
@@ -58,10 +62,10 @@ fn listen_tcp_connection(buffer: Arc<RwLock<String>>, shutdown: Arc<RwLock<bool>
             }
         }
     }
-    println!("graceful shutdown!");
+    info!("graceful shutdown!");
     {
         let connection_count = connection_count.lock().unwrap();
-        println!("current connection count={}", (*connection_count));
+        info!("current connection count={}", (*connection_count));
     }
     loop {
         let go_to_sleep: bool;

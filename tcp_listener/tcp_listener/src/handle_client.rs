@@ -10,6 +10,8 @@ use std::{
 
 use log::info;
 
+use crate::spin_wait_group::WaitGroup;
+
 pub fn handle_client(
     stream: RefCell<TcpStream>,
     shutdown: Arc<Mutex<bool>>,
@@ -165,13 +167,9 @@ pub async fn async_handle_client(
 pub fn two_way_handle_client(
     stream: RefCell<TcpStream>,
     shutdown: Arc<RwLock<bool>>,
-    connection_count: Arc<Mutex<i32>>,
+    wg: Arc<Mutex<WaitGroup>>,
     stdin_buffer: Arc<RwLock<String>>,
 ) {
-    {
-        let mut connection_count = connection_count.lock().unwrap();
-        (*connection_count) += 1;
-    }
     loop {
         let mut buffer = [0; 1024];
         stream.borrow_mut().set_nonblocking(true).unwrap();
@@ -235,15 +233,12 @@ pub fn two_way_handle_client(
                 .expect("tcp stream shutdown failed!");
         }
     }
-    {
-        info!("[{:?}] before minus count", thread::current().id());
-        let mut connection_count = connection_count.lock().unwrap();
-        (*connection_count) -= 1;
-        info!("[{:?}] after minus count", thread::current().id());
-    }
     info!(
         "close connection {}:{}",
         stream.borrow().peer_addr().unwrap().ip(),
         stream.borrow().peer_addr().unwrap().port()
     );
+    {
+        wg.lock().unwrap().done();
+    }
 }

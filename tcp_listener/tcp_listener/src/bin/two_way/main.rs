@@ -1,53 +1,26 @@
 use std::{
     cell::RefCell,
-    io::{self, Write},
+    io,
     net::TcpListener,
     sync::{Arc, Mutex, RwLock},
     thread, time,
 };
 
-use signal_hook::{consts::SIGINT, iterator::Signals};
+use tcp_listener::{graceful_shutdown, stdin};
 
 fn main() -> std::io::Result<()> {
     let shutdown = Arc::new(RwLock::new(false));
-    let shutdown_cloned = Arc::clone(&shutdown);
-    let mut signals = Signals::new(&[SIGINT])?;
-    thread::spawn(move || {
-        for sig in signals.forever() {
-            match sig {
-                SIGINT => {
-                    let mut shutdown = shutdown.write().unwrap();
-                    *shutdown = true;
-                    break;
-                }
-                _ => unreachable!(),
-            }
-        }
-        println!("[{:?}] leave signal thread!", thread::current().id())
-    });
-    let read_thread_shutdown = Arc::clone(&shutdown_cloned);
-    let buffer = Arc::new(RwLock::new(String::new()));
-    let buffer_cloned = Arc::clone(&buffer);
-    let read_thread = thread::spawn(move || {
-        loop {
-            let shutdown = read_thread_shutdown.read().unwrap();
-            if *shutdown {
-                println!("received shutdown event at read thread!");
-                break;
-            }
-            let mut read_buffer = String::new();
-            std::io::stdout().lock().write(b"please input: ").unwrap();
-            std::io::stdout().lock().flush().unwrap();
-            std::io::BufRead::read_line(&mut io::stdin().lock(), &mut read_buffer).unwrap();
-            {
-                let mut buffer = buffer.write().unwrap();
-                buffer.clear();
-                (*buffer).push_str(&read_buffer);
-            }
-        }
-        println!("[{:?}] leave read thread!", thread::current().id())
-    });
+    graceful_shutdown::listen_sig_interrupt(Arc::clone(&shutdown));
 
+    let buffer = Arc::new(RwLock::new(String::new()));
+    stdin::reading_stdin_to_buffer(Arc::clone(&buffer), Arc::clone(&shutdown));
+
+    listen_tcp_connection(Arc::clone(&buffer), Arc::clone(&shutdown));
+
+    Ok(())
+}
+
+fn listen_tcp_connection(buffer: Arc<RwLock<String>>, shutdown: Arc<RwLock<bool>>) {
     let tcp_listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     tcp_listener
         .set_nonblocking(true)
@@ -56,9 +29,9 @@ fn main() -> std::io::Result<()> {
     {
         // to enforce TcpListener will be dropped after received shutdown event
         for stream in tcp_listener.incoming() {
-            let shutdown_for_tcp_scream = Arc::clone(&shutdown_cloned);
+            let shutdown_for_tcp_scream = Arc::clone(&shutdown);
             let connection_count_tcp_stream = Arc::clone(&connection_count);
-            let stdin_buffer = Arc::clone(&buffer_cloned);
+            let stdin_buffer = Arc::clone(&buffer);
             match stream {
                 Ok(s) => {
                     thread::spawn(move || {
@@ -72,7 +45,7 @@ fn main() -> std::io::Result<()> {
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                     {
-                        let shutdown = shutdown_cloned.read().unwrap();
+                        let shutdown = shutdown.read().unwrap();
                         if *shutdown {
                             println!("received shutdown event at TcpListener!");
                             break;
@@ -102,6 +75,4 @@ fn main() -> std::io::Result<()> {
             break;
         }
     }
-    read_thread.join().unwrap();
-    Ok(())
 }

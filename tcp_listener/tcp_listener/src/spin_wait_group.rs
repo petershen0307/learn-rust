@@ -14,6 +14,7 @@ impl WaitGroup {
     }
 
     pub fn add(&mut self, delta: i32) {
+        // because done() is add(-1), and -1 to u64 is 0xffffffffffffffff, so it will overflow, use Wrapping to avoid panic
         self.state = (Wrapping(self.state) + Wrapping((delta as u64) << 32)).0;
         let count = (self.state >> 32) as i32;
         let wait = self.state as i32;
@@ -53,4 +54,13 @@ impl WaitGroup {
             thread::sleep(time::Duration::from_millis(50));
         }
     }
+}
+
+#[test]
+fn test_add() {
+    let mut wg = WaitGroup::new();
+    wg.add(1);
+    assert_eq!(wg.check_state(), 1 << 32);
+    wg.done();
+    assert_eq!(wg.check_state(), 0);
 }

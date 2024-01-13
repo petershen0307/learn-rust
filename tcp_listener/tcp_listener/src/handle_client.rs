@@ -4,7 +4,6 @@ use std::{
     io::{Read, Write},
     net,
     net::TcpStream,
-    rc::Rc,
     sync::{Arc, Mutex, RwLock},
     thread, time,
 };
@@ -90,21 +89,17 @@ pub fn handle_client(
 }
 
 // return true if received client disconnect
-pub fn non_blocking_echo_handle_client(stream: Rc<RefCell<TcpStream>>) -> bool {
+pub fn non_blocking_echo_handle_client(stream: &mut TcpStream) -> bool {
     let mut buffer = [0; 1024];
-    stream.borrow_mut().set_nonblocking(true).unwrap();
-    let read_size = match stream.borrow_mut().read(&mut buffer) {
+    stream.set_nonblocking(true).unwrap();
+    let read_size = match stream.read(&mut buffer) {
         Ok(i) => i,
         Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
             // no message received, so return directly
             return false;
         }
         Err(err) => {
-            info!(
-                "[{:?}] read err={}",
-                err,
-                stream.borrow().peer_addr().unwrap()
-            );
+            info!("[{:?}] read err={}", err, stream.peer_addr().unwrap());
             return true;
         }
     };
@@ -112,8 +107,8 @@ pub fn non_blocking_echo_handle_client(stream: Rc<RefCell<TcpStream>>) -> bool {
         info!(
             "[{:?}] received from ip:port={}:{}; read size={}; read message={}",
             thread::current().id(),
-            stream.borrow().peer_addr().unwrap().ip(),
-            stream.borrow().peer_addr().unwrap().port(),
+            stream.peer_addr().unwrap().ip(),
+            stream.peer_addr().unwrap().port(),
             read_size,
             String::from_utf8_lossy(&buffer[..])
         );
@@ -121,12 +116,9 @@ pub fn non_blocking_echo_handle_client(stream: Rc<RefCell<TcpStream>>) -> bool {
             "HTTP/1.1 200 OK {}\r\n\r\n",
             String::from_utf8_lossy(&buffer[..])
         );
-        stream.borrow_mut().write(response.as_bytes()).unwrap();
+        stream.write(response.as_bytes()).unwrap();
     } else {
-        info!(
-            "[{:?}] client disconnect!",
-            stream.borrow().peer_addr().unwrap()
-        );
+        info!("[{:?}] client disconnect!", stream.peer_addr().unwrap());
         return true;
     }
     false

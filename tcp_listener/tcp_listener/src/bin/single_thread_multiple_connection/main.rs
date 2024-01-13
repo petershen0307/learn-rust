@@ -1,9 +1,7 @@
 use std::{
-    cell::RefCell,
     collections::HashMap,
     io,
     net::TcpListener,
-    rc::Rc,
     sync::{Arc, RwLock},
     thread, time,
 };
@@ -34,7 +32,7 @@ fn echo_listen_tcp_connection(shutdown: Arc<RwLock<bool>>) {
         for stream in tcp_listener.incoming() {
             match stream {
                 Ok(s) => {
-                    tcp_streams.insert(s.peer_addr().unwrap(), Rc::new(RefCell::new(s)));
+                    tcp_streams.insert(s.peer_addr().unwrap(), s);
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                     {
@@ -42,10 +40,7 @@ fn echo_listen_tcp_connection(shutdown: Arc<RwLock<bool>>) {
                         if *shutdown {
                             info!("received shutdown event at TcpListener!");
                             for (_, stream) in tcp_streams.iter_mut() {
-                                stream
-                                    .borrow_mut()
-                                    .shutdown(std::net::Shutdown::Both)
-                                    .unwrap();
+                                stream.shutdown(std::net::Shutdown::Both).unwrap();
                             }
                             break;
                         }
@@ -54,7 +49,7 @@ fn echo_listen_tcp_connection(shutdown: Arc<RwLock<bool>>) {
                         let mut disconnected_streams = Vec::new();
                         // go through all tcp streams
                         for (address, stream) in tcp_streams.iter_mut() {
-                            if handle_client::non_blocking_echo_handle_client(Rc::clone(stream)) {
+                            if handle_client::non_blocking_echo_handle_client(stream) {
                                 disconnected_streams.push(address.clone());
                             }
                         }

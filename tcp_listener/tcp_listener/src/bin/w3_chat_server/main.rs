@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
     sync::{Arc, RwLock},
     thread, time,
@@ -16,12 +16,12 @@ fn main() -> std::io::Result<()> {
     let shutdown = Arc::new(RwLock::new(false));
     graceful_shutdown::listen_sig_interrupt(Arc::clone(&shutdown));
 
-    echo_listen_tcp_connection(Arc::clone(&shutdown));
+    chat_server(Arc::clone(&shutdown));
 
     Ok(())
 }
 
-fn echo_listen_tcp_connection(shutdown: Arc<RwLock<bool>>) {
+fn chat_server(shutdown: Arc<RwLock<bool>>) {
     let mut tcp_streams = HashMap::new();
     let tcp_listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     let mut connected_client_id = 0;
@@ -36,15 +36,11 @@ fn echo_listen_tcp_connection(shutdown: Arc<RwLock<bool>>) {
                     tcp_streams.insert(connected_client_id, s);
                     let stream = tcp_streams.get_mut(&connected_client_id).unwrap();
                     stream.set_nonblocking(true).unwrap();
-                    stream
-                        .write(
-                            format!(
-                                "greeting from sever! your are client {}\n\n",
-                                connected_client_id,
-                            )
-                            .as_bytes(),
-                        )
-                        .unwrap();
+                    let send_to_message = format!(
+                        "greeting from sever! your are client {}\n\n",
+                        connected_client_id,
+                    );
+                    write_to_stream(stream, &send_to_message, &connected_client_id);
                     connected_client_id += 1;
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -53,8 +49,9 @@ fn echo_listen_tcp_connection(shutdown: Arc<RwLock<bool>>) {
                         let shutdown = shutdown.read().unwrap();
                         if *shutdown {
                             info!("received shutdown event at TcpListener!");
-                            for (_, stream) in tcp_streams.iter_mut() {
-                                stream.write("shutdown by server\n\n".as_bytes()).unwrap();
+                            for (id, stream) in tcp_streams.iter_mut() {
+                                let send_to_message = format!("shutdown by server\n\n");
+                                write_to_stream(stream, &send_to_message, &id);
                                 stream.shutdown(std::net::Shutdown::Both).unwrap();
                             }
                             break;
@@ -84,22 +81,16 @@ fn handle_connected_client(current_id: &i32, tcp_streams: &mut HashMap<i32, TcpS
             return;
         }
     };
-    let mut buffer = [0; 1024];
     let mut message = String::new();
     // read from client
-    match current_handle_stream.read(&mut buffer) {
+    match BufReader::new(current_handle_stream).read_line(&mut message) {
         Ok(n) => {
             // handle client disconnect
             if n == 0 {
-                info!(
-                    "client {}/{} disconnected",
-                    current_id,
-                    current_handle_stream.peer_addr().unwrap()
-                );
+                info!("client {} disconnected", current_id);
                 tcp_streams.remove(current_id);
                 return;
             }
-            message.push_str(std::str::from_utf8(&buffer[0..n]).unwrap());
         }
         Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
             return;
@@ -123,7 +114,7 @@ fn handle_connected_client(current_id: &i32, tcp_streams: &mut HashMap<i32, TcpS
     if command_message[0].eq_ignore_ascii_case("broadcast") {
         for (id, stream) in tcp_streams.iter_mut() {
             if *current_id != *id {
-                stream.write(send_to_message.as_bytes()).unwrap();
+                write_to_stream(stream, &send_to_message, &id);
             }
         }
     } else {
@@ -137,19 +128,26 @@ fn handle_connected_client(current_id: &i32, tcp_streams: &mut HashMap<i32, TcpS
         };
         match tcp_streams.get_mut(&target_id) {
             Some(stream) => {
-                stream.write(send_to_message.as_bytes()).unwrap();
+                write_to_stream(stream, &send_to_message, &target_id);
             }
             None => {
                 info!("client {} not found", target_id);
-                // current_handle_stream
-                //     .write("client not found\n\n".as_bytes())
-                //     .unwrap();
-                tcp_streams
-                    .get_mut(current_id)
-                    .unwrap()
-                    .write("client not found\n\n".as_bytes())
-                    .unwrap();
+                let send_to_message = format!("client {} not found\n\n", target_id);
+                write_to_stream(
+                    tcp_streams.get_mut(current_id).unwrap(),
+                    &send_to_message,
+                    &current_id,
+                );
             }
+        }
+    }
+}
+
+fn write_to_stream(stream: &mut TcpStream, send_to_message: &String, client_id: &i32) {
+    match stream.write(send_to_message.as_bytes()) {
+        Ok(_) => {}
+        Err(_) => {
+            info!("client {} disconnected", client_id);
         }
     }
 }

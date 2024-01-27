@@ -29,9 +29,13 @@ pub struct ZeroDataType {}
 // this function will block the caller
 pub fn listen_sig_interrupt_to_close_socket_fd(
     socket_fd: i32,
-) -> tokio::sync::broadcast::Receiver<ZeroDataType> {
+) -> (
+    tokio::sync::broadcast::Sender<ZeroDataType>,
+    tokio::sync::broadcast::Receiver<ZeroDataType>,
+) {
     let mut signals = Signals::new(&[SIGINT]).unwrap();
     let (sender, receiver) = tokio::sync::broadcast::channel(1);
+    let sender_clone = sender.clone();
     tokio::spawn(async move {
         for sig in signals.forever() {
             match sig {
@@ -44,7 +48,7 @@ pub fn listen_sig_interrupt_to_close_socket_fd(
                         }
                     }
                     let none = ZeroDataType {};
-                    sender.send(none).unwrap();
+                    sender_clone.send(none).unwrap();
                     break;
                 }
                 _ => unreachable!(),
@@ -52,5 +56,5 @@ pub fn listen_sig_interrupt_to_close_socket_fd(
         }
         info!("[{:?}] leave signal thread!", thread::current().id());
     });
-    receiver
+    (sender, receiver)
 }

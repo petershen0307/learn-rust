@@ -20,14 +20,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         listener.as_raw_fd(),
     );
 
-    socks4_connect(shutdown_channel, &listener).await?;
+    tcp_listener_handle(
+        shutdown_channel,
+        &listener,
+        |c: tokio::net::TcpStream| -> Result<(), Box<dyn std::error::Error>> { Ok(()) },
+    )
+    .await?;
 
     Ok(())
 }
 
-async fn socks4_connect(
+async fn tcp_listener_handle(
     mut shutdown_channel: tokio::sync::broadcast::Receiver<graceful_shutdown::ZeroDataType>,
     listener: &TcpListener,
+    connection_handle: fn(tokio::net::TcpStream) -> Result<(), Box<dyn std::error::Error>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         tokio::select! {

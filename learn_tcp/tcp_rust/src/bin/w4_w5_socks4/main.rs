@@ -33,26 +33,34 @@ async fn echo(
 
     // In a loop, read data from the socket and write the data back.
     loop {
-        let n = match socket.read(&mut buf).await {
-            // socket closed
-            Ok(n) if n == 0 => {
-                info!("{:?} connection close", socket.peer_addr());
+        tokio::select! {
+            r = socket.read(&mut buf) => {
+                let n = match r {
+                    // socket closed
+                    Ok(n) if n == 0 => {
+                        info!("{:?} connection close", socket.peer_addr());
+                        return;
+                    }
+                    Ok(n) => {
+                        info!("received from {:?} n={}", socket.peer_addr(), n);
+                        n
+                    }
+                    Err(e) => {
+                        error!("failed to read from socket; err = {:?}", e);
+                        return;
+                    }
+                };
+                // Write the data back
+                if let Err(e) = socket.write_all(&buf[0..n]).await {
+                    error!("failed to write to socket; err = {:?}", e);
+                    return;
+                }
+            }
+            _= shutdown_channel.recv() => {
+                socket.shutdown().await.unwrap();
+                info!("close connection {:?}", socket.peer_addr());
                 return;
             }
-            Ok(n) => {
-                info!("received from {:?} n={}", socket.peer_addr(), n);
-                n
-            }
-            Err(e) => {
-                error!("failed to read from socket; err = {:?}", e);
-                return;
-            }
-        };
-
-        // Write the data back
-        if let Err(e) = socket.write_all(&buf[0..n]).await {
-            error!("failed to write to socket; err = {:?}", e);
-            return;
         }
     }
 }
@@ -64,7 +72,7 @@ async fn tcp_listener_handle(
 ) {
     loop {
         tokio::select! {
-            r = listener.accept() =>{
+            r = listener.accept() => {
                 let (socket, addr) = r.unwrap();
                 let shutdown_channel=shutdown_sender.subscribe();
                 tokio::spawn(async move {
@@ -72,7 +80,8 @@ async fn tcp_listener_handle(
                     echo(shutdown_channel, socket).await
                 });
             }
-            _ = shutdown_receiver.recv() =>{
+            _ = shutdown_receiver.recv() => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
                 break;
             }
         }

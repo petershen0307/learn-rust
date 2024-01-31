@@ -1,14 +1,10 @@
-use std::{
-    os::fd::AsRawFd,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::os::fd::AsRawFd;
 
 use env_logger::Env;
 use log::{debug, error, info};
 use tcp_listener::graceful_shutdown;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
 };
 
@@ -26,46 +22,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn echo(
-    mut shutdown_channel: tokio::sync::broadcast::Receiver<graceful_shutdown::ZeroDataType>,
-    mut socket: tokio::net::TcpStream,
-) {
-    let mut buf = [0; 1024];
-
-    // In a loop, read data from the socket and write the data back.
-    loop {
-        tokio::select! {
-            r = socket.read(&mut buf) => {
-                let n = match r {
-                    // socket closed
-                    Ok(n) if n == 0 => {
-                        info!("{:?} connection close", socket.peer_addr());
-                        return;
-                    }
-                    Ok(n) => {
-                        info!("received from {:?} n={}", socket.peer_addr(), n);
-                        n
-                    }
-                    Err(e) => {
-                        error!("failed to read from socket; err = {:?}", e);
-                        return;
-                    }
-                };
-                // Write the data back
-                if let Err(e) = socket.write_all(&buf[0..n]).await {
-                    error!("failed to write to socket; err = {:?}", e);
-                    return;
-                }
-            }
-            _= shutdown_channel.recv() => {
-                socket.shutdown().await.unwrap();
-                info!("close connection {:?}", socket.peer_addr());
-                return;
-            }
-        }
-    }
-}
-
 async fn tcp_listener_handle(
     shutdown_sender: tokio::sync::broadcast::Sender<graceful_shutdown::ZeroDataType>,
     mut shutdown_receiver: tokio::sync::broadcast::Receiver<graceful_shutdown::ZeroDataType>,
@@ -78,11 +34,12 @@ async fn tcp_listener_handle(
                 let shutdown_channel=shutdown_sender.subscribe();
                 tokio::spawn(async move {
                     info!("connect from {:?}", addr);
-                    echo(shutdown_channel, socket).await
+                    socks4_connect(shutdown_channel, socket).await
                 });
             }
             _ = shutdown_receiver.recv() => {
-                std::thread::sleep(std::time::Duration::from_millis(50));
+                std::thread::sleep(std::time::Duration::from_secs(5));
+                info!("server shutdown!");
                 break;
             }
         }
@@ -114,8 +71,8 @@ struct Socks4ConnectHeader {
     // 93: request rejected because the client program and identd
     //     report different user-ids
     // The remaining fields are ignored.
-    pub vn: u8,
-    pub cd: u8,
+    pub vn: u8, // socks protocol
+    pub cd: u8, // command 1 be connect request
     pub dest_port: u16,
     pub dest_ip: u32,
     pub user_id: Vec<u8>,
@@ -135,39 +92,75 @@ impl Socks4ConnectHeader {
         Ok(Socks4ConnectHeader {
             vn: data[0],
             cd: data[1],
-            dest_port: u16::from_ne_bytes(data[2..4].try_into().unwrap()),
-            dest_ip: u32::from_ne_bytes(data[4..8].try_into().unwrap()),
+            dest_port: u16::from_be_bytes(data[2..4].try_into().unwrap()),
+            dest_ip: u32::from_be_bytes(data[4..8].try_into().unwrap()),
             user_id: data[8..data_length].to_vec(),
         })
     }
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes_without_user_id(&self) -> Vec<u8> {
         let mut data: Vec<u8> = Vec::new();
         data.push(self.vn);
         data.push(self.cd);
-        data.push(self.dest_port.to_le_bytes()[0]);
-        data.push(self.dest_port.to_le_bytes()[1]);
-        data.push(self.dest_ip.to_le_bytes()[0]);
-        data.push(self.dest_ip.to_le_bytes()[1]);
-        data.push(self.dest_ip.to_le_bytes()[2]);
-        data.push(self.dest_ip.to_le_bytes()[3]);
+        data.push(self.dest_port.to_be_bytes()[0]);
+        data.push(self.dest_port.to_be_bytes()[1]);
+        data.push(self.dest_ip.to_be_bytes()[0]);
+        data.push(self.dest_ip.to_be_bytes()[1]);
+        data.push(self.dest_ip.to_be_bytes()[2]);
+        data.push(self.dest_ip.to_be_bytes()[3]);
         data
     }
 }
 
+impl std::fmt::Display for Socks4ConnectHeader {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            fmt,
+            "addr={}:{} vn={} cd={} userID={:?}",
+            to_ipv4_addr(self.dest_ip),
+            self.dest_port,
+            self.vn,
+            self.cd,
+            self.user_id
+        )
+    }
+}
+
+fn to_ipv4_addr(ip: u32) -> std::net::Ipv4Addr {
+    std::net::Ipv4Addr::new(
+        ip.to_le_bytes()[3],
+        ip.to_le_bytes()[2],
+        ip.to_le_bytes()[1],
+        ip.to_le_bytes()[0],
+    )
+}
+
+#[test]
+fn test_ip_convert() {
+    // 127.0.0.1
+    let ip = to_ipv4_addr(0x7F000001);
+    assert_eq!(std::net::Ipv4Addr::new(127, 0, 0, 1), ip);
+}
+
+#[test]
+fn test_socks_to_bytes_convert() {
+    let expected = vec![0x4, 0x1, 0x1, 0xbb, 23, 22, 173, 247];
+    let socks4 = Socks4ConnectHeader::new(expected.clone()).unwrap();
+    let r = socks4.to_bytes_without_user_id();
+    assert_eq!(expected, r);
+}
+
 async fn socks4_connect(
     mut shutdown_channel: tokio::sync::broadcast::Receiver<graceful_shutdown::ZeroDataType>,
-    mut socket: tokio::net::TcpStream,
+    socket: tokio::net::TcpStream,
 ) {
     // state initial read until 0
-    let mut buf_stream = tokio::io::BufStream::new(socket);
-    let mut read_buf = Vec::new();
-    buf_stream.read_until(0, &mut read_buf).await.unwrap();
-    let sock4_data = match Socks4ConnectHeader::new(read_buf) {
+    //let mut request_stream = tokio::io::BufStream::new(socket);
+    let mut request_stream = socket;
+    let mut read_buf: [u8; 1024] = [0; 1024];
+    let n = request_stream.read(&mut read_buf).await.unwrap();
+    let sock4_data = match Socks4ConnectHeader::new(read_buf[0..n].to_vec()) {
         Ok(n) => {
-            info!("vn: {}", n.vn);
-            info!("cd: {}", n.cd);
-            info!("port: {}", n.dest_port);
-            info!("ip: {}", n.dest_ip);
+            info!("socks4 info {}", n);
             n
         }
         Err(e) => {
@@ -180,8 +173,11 @@ async fn socks4_connect(
                 dest_ip: 0,
                 user_id: Vec::new(),
             };
-            buf_stream.write_all(&response.to_bytes()).await.unwrap();
-            buf_stream.shutdown().await.unwrap();
+            request_stream
+                .write_all(&response.to_bytes_without_user_id())
+                .await
+                .unwrap();
+            request_stream.shutdown().await.unwrap();
             return;
         }
     };
@@ -194,10 +190,82 @@ async fn socks4_connect(
         91
     };
     response.user_id.clear();
-    buf_stream.write_all(&response.to_bytes()).await.unwrap();
+    request_stream
+        .write_all(&response.to_bytes_without_user_id())
+        .await
+        .unwrap();
     if sock4_data.cd != 1 {
-        buf_stream.shutdown().await.unwrap();
+        request_stream.shutdown().await.unwrap();
         return;
     }
     // state successful request, wait util client close connection or server shutdown
+    let dest_stream =
+        tokio::net::TcpStream::connect((to_ipv4_addr(sock4_data.dest_ip), sock4_data.dest_port))
+            .await;
+    let mut dest_stream = match dest_stream {
+        Ok(stream) => stream,
+        Err(e) => {
+            let error_msg = format!(
+                "connect to {}:{} got error={}",
+                to_ipv4_addr(sock4_data.dest_ip),
+                sock4_data.dest_port,
+                e
+            );
+            error!("{}", error_msg);
+            request_stream.write(error_msg.as_bytes()).await.unwrap();
+            request_stream.shutdown().await.unwrap();
+            return;
+        }
+    };
+    info!("connect to destination {} success", sock4_data);
+    let mut dest_buf = [0; 1024];
+    let mut request_buf = [0; 1024];
+    loop {
+        tokio::select! {
+            // read data from dest_stream then write data to request_stream
+            r = dest_stream.read(&mut dest_buf) => {
+                match r {
+                    Ok(n) if n == 0 => {
+                        // socket closed
+                        debug!("{:?} dest_stream connection close", dest_stream.peer_addr());
+                        request_stream.shutdown().await.unwrap();
+                        return;
+                    }
+                    Ok(n) => {
+                        debug!("received from {:?} n={}", dest_stream.peer_addr(), n);
+                        request_stream.write(&dest_buf[0..n]).await.unwrap();
+                    }
+                    Err(e) => {
+                        error!("failed to read from socket; err = {:?}", e);
+                        return;
+                    }
+                };
+            }
+            // read data from request_stream then write data to dest_stream
+            r = request_stream.read(&mut request_buf) => {
+                match r {
+                    Ok(n) if n == 0 => {
+                        // socket closed
+                        debug!("{} request_stream connection close", sock4_data);
+                        dest_stream.shutdown().await.unwrap();
+                        return;
+                    }
+                    Ok(n) => {
+                        debug!("received from {} n={}", sock4_data, n);
+                        dest_stream.write(&request_buf[0..n]).await.unwrap();
+                    }
+                    Err(e) => {
+                        error!("failed to read from socket; err = {:?}", e);
+                        return;
+                    }
+                };
+            }
+            // shutdown event, close dest_stream and request_stream
+            _ = shutdown_channel.recv() => {
+                info!("server shutdown!");
+                dest_stream.shutdown().await.unwrap();
+                request_stream.shutdown().await.unwrap();
+            }
+        }
+    }
 }

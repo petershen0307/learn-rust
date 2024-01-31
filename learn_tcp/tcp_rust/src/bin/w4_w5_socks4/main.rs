@@ -156,9 +156,17 @@ async fn socks4_connect(
     // state initial read until 0
     //let mut request_stream = tokio::io::BufStream::new(socket);
     let mut request_stream = socket;
-    let mut read_buf: [u8; 1024] = [0; 1024];
-    let n = request_stream.read(&mut read_buf).await.unwrap();
-    let sock4_data = match Socks4ConnectHeader::new(read_buf[0..n].to_vec()) {
+    let mut sock4_header_bytes = Vec::new();
+    {
+        const BUF_SIZE: usize = 5;
+        let mut read_buf: [u8; BUF_SIZE] = [0; BUF_SIZE];
+        let mut n = BUF_SIZE;
+        while n == BUF_SIZE {
+            n = request_stream.read(&mut read_buf).await.unwrap();
+            sock4_header_bytes.append(&mut read_buf[0..n].to_vec());
+        }
+    }
+    let sock4_data = match Socks4ConnectHeader::new(sock4_header_bytes) {
         Ok(n) => {
             info!("socks4 info {}", n);
             n
@@ -262,7 +270,7 @@ async fn socks4_connect(
             }
             // shutdown event, close dest_stream and request_stream
             _ = shutdown_channel.recv() => {
-                info!("server shutdown!");
+                info!("server shutdown close connection {}!", sock4_data);
                 dest_stream.shutdown().await.unwrap();
                 request_stream.shutdown().await.unwrap();
             }

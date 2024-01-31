@@ -11,6 +11,9 @@
     },
     {
       "path": "rust-book"
+    },
+    {
+      "path": "tcp_listener"
     }
   ]
 }

@@ -273,6 +273,7 @@ async fn socks4_connect(
                 info!("server shutdown close connection {}!", sock4_data);
                 dest_stream.shutdown().await.unwrap();
                 request_stream.shutdown().await.unwrap();
+                return;
             }
         }
     }

@@ -64,7 +64,7 @@ pub fn handle_client(
             "HTTP/1.1 200 OK {}\r\n\r\n",
             String::from_utf8_lossy(&buffer[..])
         );
-        stream.borrow_mut().write(response.as_bytes()).unwrap();
+        stream.borrow_mut().write_all(response.as_bytes()).unwrap();
     }
 
     {
@@ -116,7 +116,7 @@ pub fn non_blocking_echo_handle_client(stream: &mut TcpStream) -> bool {
             "HTTP/1.1 200 OK {}\r\n\r\n",
             String::from_utf8_lossy(&buffer[..])
         );
-        stream.write(response.as_bytes()).unwrap();
+        stream.write_all(response.as_bytes()).unwrap();
     } else {
         info!("[{:?}] client disconnect!", stream.peer_addr().unwrap());
         return true;
@@ -164,7 +164,7 @@ pub fn two_way_handle_client(
             let mut stdin_buffer = stdin_buffer.write().unwrap();
             if !(*stdin_buffer).is_empty() {
                 let response = format!("server send message={}", stdin_buffer);
-                stream.borrow_mut().write(response.as_bytes()).unwrap();
+                stream.borrow_mut().write_all(response.as_bytes()).unwrap();
                 (*stdin_buffer).clear();
             }
         }
@@ -181,7 +181,7 @@ pub fn two_way_handle_client(
                 "HTTP/1.1 200 OK {}\r\n\r\n",
                 String::from_utf8_lossy(&buffer[..])
             );
-            stream.borrow_mut().write(response.as_bytes()).unwrap();
+            stream.borrow_mut().write_all(response.as_bytes()).unwrap();
         }
     }
 

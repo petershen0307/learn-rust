@@ -56,6 +56,12 @@ impl WaitGroup {
     }
 }
 
+impl Default for WaitGroup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[test]
 fn test_add() {
     let mut wg = WaitGroup::new();

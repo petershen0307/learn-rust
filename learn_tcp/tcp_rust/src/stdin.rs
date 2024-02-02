@@ -19,7 +19,7 @@ pub fn reading_stdin_to_buffer(
                 break;
             }
             let mut read_buffer = String::new();
-            io::stdout().lock().write(b"please input: ").unwrap();
+            io::stdout().lock().write_all(b"please input: ").unwrap();
             io::stdout().lock().flush().unwrap();
             io::BufRead::read_line(&mut io::stdin().lock(), &mut read_buffer).unwrap();
             {

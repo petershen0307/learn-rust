@@ -98,16 +98,16 @@ impl Socks4ConnectHeader {
         })
     }
     pub fn to_bytes_without_user_id(&self) -> Vec<u8> {
-        let mut data: Vec<u8> = Vec::new();
-        data.push(self.vn);
-        data.push(self.cd);
-        data.push(self.dest_port.to_be_bytes()[0]);
-        data.push(self.dest_port.to_be_bytes()[1]);
-        data.push(self.dest_ip.to_be_bytes()[0]);
-        data.push(self.dest_ip.to_be_bytes()[1]);
-        data.push(self.dest_ip.to_be_bytes()[2]);
-        data.push(self.dest_ip.to_be_bytes()[3]);
-        data
+        vec![
+            self.vn,
+            self.cd,
+            self.dest_port.to_be_bytes()[0],
+            self.dest_port.to_be_bytes()[1],
+            self.dest_ip.to_be_bytes()[0],
+            self.dest_ip.to_be_bytes()[1],
+            self.dest_ip.to_be_bytes()[2],
+            self.dest_ip.to_be_bytes()[3],
+        ]
     }
 }
 
@@ -220,7 +220,10 @@ async fn socks4_connect(
                 e
             );
             error!("{}", error_msg);
-            request_stream.write(error_msg.as_bytes()).await.unwrap();
+            request_stream
+                .write_all(error_msg.as_bytes())
+                .await
+                .unwrap();
             request_stream.shutdown().await.unwrap();
             return;
         }
@@ -241,7 +244,7 @@ async fn socks4_connect(
                     }
                     Ok(n) => {
                         debug!("received from {:?} n={}", dest_stream.peer_addr(), n);
-                        request_stream.write(&dest_buf[0..n]).await.unwrap();
+                        request_stream.write_all(&dest_buf[0..n]).await.unwrap();
                     }
                     Err(e) => {
                         error!("failed to read from socket; err = {:?}", e);
@@ -260,7 +263,7 @@ async fn socks4_connect(
                     }
                     Ok(n) => {
                         debug!("received from {} n={}", sock4_data, n);
-                        dest_stream.write(&request_buf[0..n]).await.unwrap();
+                        dest_stream.write_all(&request_buf[0..n]).await.unwrap();
                     }
                     Err(e) => {
                         error!("failed to read from socket; err = {:?}", e);

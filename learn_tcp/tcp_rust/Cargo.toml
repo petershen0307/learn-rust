@@ -14,3 +14,4 @@ tokio = { version = "1.35.1", features = ["full"] }
 rocket = "0.5.0"
 sha2 = "0.10"
 base16ct = { version = "0.2.0", features = ["alloc"] }
+walkdir = "2.4.0"

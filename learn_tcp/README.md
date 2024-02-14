@@ -11,8 +11,17 @@
 * Implement "Connect"
 ## Week 5 - Socks4 Server
 * Implement "Bind"
-## Week 6 - Socks4a Server & Socks5 server
-* https://www.openssh.com/txt/socks4a.protocol
-* https://medium.com/@nimit95/socks-5-a-proxy-protocol-b741d3bec66c
-* Extend W4 & W5 to support Socks4a
-* Implement Socks5 Server
+## Week 6 - Web service by framework
+* Implement web service
+    * **POST** api/v1/filehasher
+        * body is the path (ex. `/Users/kiwi/target`)
+    * Calucate **SHA512** of given directory, output should be sorted by filename
+        * use the path got from request `/Users/kiwi/target`
+        * if there are 3 files in the directory with filename `2.pdf`, `1.txt`, `3.doc`
+        * the response should be like the following
+ ```
+/Users/kiwi/target/1.txt <SHA512 of 1.txt>
+/Users/kiwi/target/2.pdf <SHA512 of 2.pdf>
+/Users/kiwi/target/3.doc <SHA512 of 3.doc>
+```
+## Week 7 - Revisit performance week 6

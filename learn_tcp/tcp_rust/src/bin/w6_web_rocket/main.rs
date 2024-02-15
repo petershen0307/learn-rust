@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
-#[post("/v1/filehasher", data = "<path>")]
+#[post("/api/v1/filehasher", data = "<path>")]
 fn file_sha(path: String) -> String {
     tcp_listener::file_sha::list_files_sha512(std::path::Path::new(&path)).join("\n")
 }

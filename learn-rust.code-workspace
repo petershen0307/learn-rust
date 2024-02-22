@@ -13,7 +13,10 @@
       "path": "rust-book"
     },
     {
-      "path": "tcp_listener"
+      "path": "learn_tcp"
+    },
+    {
+      "path": "tokio_channel"
     }
   ]
 }

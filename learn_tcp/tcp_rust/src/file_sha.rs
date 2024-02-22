@@ -1,3 +1,5 @@
+pub mod green_thread;
+
 use sha2::{Digest, Sha512};
 use walkdir::WalkDir;
 

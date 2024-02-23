@@ -1,4 +1,16 @@
 pub mod green_thread;
+pub mod thread;
+pub mod tokio;
+
+enum Job {
+    Data(std::path::PathBuf),
+    Stop,
+}
+
+enum Result {
+    Data(String),
+    Stop,
+}
 
 use sha2::{Digest, Sha512};
 use walkdir::WalkDir;

@@ -5,7 +5,7 @@ use std::{
 
 use crate::file_sha::file_sha512;
 use crate::file_sha::Job;
-use crate::file_sha::Result;
+use crate::file_sha::JobResult;
 
 use walkdir::WalkDir;
 
@@ -43,10 +43,10 @@ pub fn list_files_sha512(path: std::path::PathBuf, workers: usize) -> Vec<String
     let mut stop_workers = 0_usize;
     loop {
         match result_rx.recv().unwrap() {
-            Result::Data(r) => {
+            JobResult::Data(r) => {
                 result.push(r);
             }
-            Result::Stop => {
+            JobResult::Stop => {
                 stop_workers += 1;
                 if stop_workers == workers {
                     break;
@@ -58,7 +58,7 @@ pub fn list_files_sha512(path: std::path::PathBuf, workers: usize) -> Vec<String
     result
 }
 
-fn cal_file_sha_worker(input: Arc<Mutex<mpsc::Receiver<Job>>>, output: mpsc::Sender<Result>) {
+fn cal_file_sha_worker(input: Arc<Mutex<mpsc::Receiver<Job>>>, output: mpsc::Sender<JobResult>) {
     loop {
         let job: Job;
         {
@@ -69,10 +69,10 @@ fn cal_file_sha_worker(input: Arc<Mutex<mpsc::Receiver<Job>>>, output: mpsc::Sen
             Job::Data(path) => {
                 let mut file = std::fs::File::open(&path).unwrap();
                 let sha = file_sha512(&mut file);
-                let _ = output.send(Result::Data(format!("{} {}", path.display(), sha)));
+                let _ = output.send(JobResult::Data(format!("{} {}", path.display(), sha)));
             }
             Job::Stop => {
-                let _ = output.send(Result::Stop);
+                let _ = output.send(JobResult::Stop);
                 break;
             }
         }

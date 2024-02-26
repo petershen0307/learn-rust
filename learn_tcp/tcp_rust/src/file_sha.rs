@@ -7,7 +7,7 @@ enum Job {
     Stop,
 }
 
-enum Result {
+enum JobResult {
     Data(String),
     Stop,
 }

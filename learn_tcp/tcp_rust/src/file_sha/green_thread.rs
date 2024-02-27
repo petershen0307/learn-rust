@@ -8,18 +8,13 @@ pub async fn list_files_with_workers(path: std::path::PathBuf, workers: usize) -
     let (path_tx, path_rx) = async_channel::bounded(workers);
     let (result_tx, mut result_rx) = mpsc::channel(workers);
 
-    // the loop iteration times will not equal to workers number, because we want to put the outer receiver {path_rx} and sender {result_tx} ownership to the worker function
-    for _ in 0..workers - 1 {
+    let mut result_txs = vec![result_tx];
+    (0..workers).for_each(|_| result_txs.push(result_txs[0].clone()));
+
+    while let Some(output) = result_txs.pop() {
         let input = path_rx.clone();
-        let output = result_tx.clone();
         tokio::spawn(async move { worker(input, output).await });
     }
-
-    // move the outer receiver {path_rx} and sender {result_tx} ownership to the worker function
-    // when all senders are out of scope, the channel will be close
-    // the key point is all senders should be recycle, otherwise the channel wouldn't close and the spawn task also not stop
-    // and the outcome will be program hang
-    tokio::spawn(async move { worker(path_rx, result_tx).await });
 
     tokio::spawn(async move {
         for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {

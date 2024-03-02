@@ -25,3 +25,7 @@
 /Users/kiwi/target/3.doc <SHA512 of 3.doc>
 ```
 ## Week 7 - Revisit performance week 6
+## Week 8 - Revisit performance week 7
+## Week 9 - Little Redis
+* Build a single/standalone server for serving redis client
+   * Support only SET/GET/DEL for 1st week 

@@ -1,12 +1,12 @@
 pub mod command_reader;
 pub mod graceful_shutdown;
 
-use crate::models::{command::Command, configuration::Configuration};
+use crate::{models::configuration::Configuration, tcp_server};
 
-use std::os::fd::AsRawFd;
+use std::{os::fd::AsRawFd, sync::Arc};
 
 use log::{debug, error, info};
-use tokio::net::TcpListener;
+use tokio::{io::AsyncWriteExt, net::TcpListener, sync::Semaphore};
 
 pub async fn tcp_server(config: Configuration) {
     let listener = TcpListener::bind(format!("127.0.0.1:{}", config.port))
@@ -15,42 +15,62 @@ pub async fn tcp_server(config: Configuration) {
     let shutdown_channel =
         graceful_shutdown::listen_sig_interrupt_to_close_socket_fd(AsRawFd::as_raw_fd(&listener));
 
-    let (msg_tx, msg_rx) = async_channel::bounded(config.workers as usize);
-    let mut workers = Vec::new();
-    for _ in 0..config.workers {
-        let shutdown_channel = shutdown_channel.subscribe();
-        let msg_rx = msg_rx.clone();
-        workers.push(tokio::spawn(async move {
-            command_reader::command_reader(shutdown_channel, msg_rx).await
-        }));
-    }
-    let shutdown_channel = shutdown_channel.subscribe();
-    tcp_listener_handle(shutdown_channel, &listener, msg_tx).await;
-    while let Some(worker) = workers.pop() {
-        tokio::join!(worker)
-            .0
-            .unwrap_or_else(|x| error!("join error={}", x));
-    }
+    tcp_listener_handle(shutdown_channel, &listener, config.workers).await;
 }
 
 async fn tcp_listener_handle(
-    mut shutdown_channel: tokio::sync::broadcast::Receiver<()>,
+    shutdown_channel: tokio::sync::broadcast::Sender<()>,
     listener: &TcpListener,
-    channel: async_channel::Sender<Command>,
+    concurrent_connection: usize,
 ) {
+    let semaphore = Arc::new(Semaphore::new(concurrent_connection));
+    let mut shutdown_channel_main = shutdown_channel.subscribe();
     loop {
         tokio::select! {
-            r = listener.accept() => {
-                let (socket, addr) = r.unwrap();
-                debug!("client connected={}", addr);
-                channel.send(Command::Data(socket)).await.unwrap_or_else(|x|{
-                    error!("send command error={}", x);
-                });
+            connection = listener.accept() => {
+                let r = if connection.is_ok() {
+                    connection.unwrap()
+                }else{
+                    continue
+                };
+                handle_connection(shutdown_channel.clone(), r, semaphore.clone()).await;
             }
-            _ = shutdown_channel.recv() => {
+            _ = shutdown_channel_main.recv() => {
                 info!("close listener!");
                 break;
             }
         }
     }
+}
+
+async fn handle_connection(
+    shutdown_channel: tokio::sync::broadcast::Sender<()>,
+    connection: (tokio::net::TcpStream, std::net::SocketAddr),
+    semaphore: Arc<Semaphore>,
+) {
+    let (mut tcp_stream, addr) = connection;
+    debug!("client connected={}", addr);
+    let permit = semaphore.try_acquire_owned();
+    if permit.is_err() {
+        info!("too many connection drop this one={}", addr);
+        // drop connection
+        tcp_stream
+            .write_all(b"-ERR 429 too many connection\r\n")
+            .await
+            .unwrap_or_else(|x| {
+                error!("write tcp stream error={}", x);
+            });
+        tcp_stream.shutdown().await.unwrap_or_else(|x| {
+            error!("shutdown tcp stream error={}", x);
+        });
+        return;
+    }
+    let shutdown_channel = shutdown_channel.subscribe();
+    let permit = permit.unwrap();
+    tokio::spawn(async move {
+        tcp_server::command_reader::CommandReader::new(shutdown_channel, tcp_stream)
+            .run()
+            .await;
+        drop(permit);
+    });
 }

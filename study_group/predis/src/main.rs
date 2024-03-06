@@ -1,10 +1,8 @@
-use std::{collections::HashMap, os::fd::AsRawFd};
+use std::os::fd::AsRawFd;
 
 use predis::{
-    models::{
-        configuration::Configuration,
-        data_command::{self, DataWatcherMessage},
-    },
+    data_watcher,
+    models::{configuration::Configuration, data_command::DataWatcherMessage},
     tcp_server::graceful_shutdown,
 };
 
@@ -45,28 +43,9 @@ async fn predis_server(config: Configuration) {
     let shutdown_channel =
         graceful_shutdown::listen_sig_interrupt_to_close_socket_fd(AsRawFd::as_raw_fd(&listener));
 
-    let (tx, mut rx) = mpsc::channel::<DataWatcherMessage>(config.workers);
-    // create data watcher
-    tokio::spawn(async move {
-        let mut map = HashMap::<String, String>::new();
-        while let Some(r) = rx.recv().await {
-            let response = match r.data {
-                data_command::Command::Set(s) => {
-                    map.insert(s[0].clone(), s[1].clone());
-                    resp::Value::String("ok".to_string())
-                }
-                data_command::Command::Get(g) => match map.get(&g) {
-                    Some(v) => resp::Value::String(v.to_string()),
-                    None => resp::Value::Null,
-                },
-                data_command::Command::Del(d) => match map.remove(&d) {
-                    Some(_) => resp::Value::Integer(1),
-                    None => resp::Value::Integer(0),
-                },
-                _ => resp::Value::Error("ERR unknown command".to_string()),
-            };
-            r.callback.send(response).unwrap();
-        }
-    });
+    let (tx, rx) = mpsc::channel::<DataWatcherMessage>(config.workers);
+
+    data_watcher::new(rx).await;
+
     predis::tcp_server::tcp_listener_handle(shutdown_channel, &listener, config.workers, tx).await;
 }

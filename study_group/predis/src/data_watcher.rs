@@ -8,8 +8,8 @@ pub async fn new(mut rx: tokio::sync::mpsc::Receiver<DataWatcherMessage>) {
         let mut map = HashMap::<String, String>::new();
         while let Some(r) = rx.recv().await {
             let response = match r.data {
-                Command::Set(s) => {
-                    map.insert(s[0].clone(), s[1].clone());
+                Command::Set(k, v) => {
+                    map.insert(k, v);
                     resp::Value::String("ok".to_string())
                 }
                 Command::Get(g) => match map.get(&g) {

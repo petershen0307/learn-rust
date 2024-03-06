@@ -90,10 +90,7 @@ fn test_parse_command_set_key_with_value_string() {
     // assert
     assert!(r.is_ok());
     let r = r.unwrap();
-    assert_eq!(
-        Command::Set(vec!["key".to_string(), "value".to_string(),]),
-        r
-    );
+    assert_eq!(Command::Set("key".to_string(), "value".to_string()), r);
 }
 
 #[test]

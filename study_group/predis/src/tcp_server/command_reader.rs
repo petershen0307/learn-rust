@@ -1,23 +1,26 @@
+use crate::models::data_command::DataWatcherMessage;
+use crate::redis_protocol::RedisProtocolAnalyzer;
+
 use log::{debug, error, info};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-// QueryMessage is the data structure for query data from data watcher thread
-pub struct QueryMessage {}
+use tokio::sync::mpsc;
 
 pub struct CommandReader {
     shutdown_channel: tokio::sync::broadcast::Receiver<()>,
     tcp_stream: tokio::net::TcpStream,
-    //query_channel: mpsc::Sender<QueryMessage>,
+    rpa: RedisProtocolAnalyzer,
 }
 
 impl CommandReader {
     pub fn new(
         shutdown_channel: tokio::sync::broadcast::Receiver<()>,
         tcp_stream: tokio::net::TcpStream,
+        tx: mpsc::Sender<DataWatcherMessage>,
     ) -> Self {
         CommandReader {
             shutdown_channel,
             tcp_stream,
+            rpa: RedisProtocolAnalyzer::new(tx),
         }
     }
 
@@ -37,7 +40,8 @@ impl CommandReader {
                         break;
                     }
                     debug!("input={}", std::str::from_utf8(&buf).unwrap());
-                    let _ = self.tcp_stream.write_all(b"+OK\r\n").await;
+                    let response = self.rpa.apply(&buf).await;
+                    self.tcp_stream.write_all(&response).await.unwrap();
                 }
             }
         }
@@ -57,6 +61,4 @@ impl CommandReader {
         }
         read_buf
     }
-
-    async fn process_command_and_response(tcp_stream: &mut tokio::net::TcpStream) {}
 }

@@ -5,19 +5,19 @@ use log::{debug, error, info};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 
-pub struct CommandReader {
+pub struct TcpStreamHandler {
     shutdown_channel: tokio::sync::broadcast::Receiver<()>,
     tcp_stream: tokio::net::TcpStream,
     rpa: RedisProtocolAnalyzer,
 }
 
-impl CommandReader {
+impl TcpStreamHandler {
     pub fn new(
         shutdown_channel: tokio::sync::broadcast::Receiver<()>,
         tcp_stream: tokio::net::TcpStream,
         tx: mpsc::Sender<DataWatcherMessage>,
     ) -> Self {
-        CommandReader {
+        TcpStreamHandler {
             shutdown_channel,
             tcp_stream,
             rpa: RedisProtocolAnalyzer::new(tx),

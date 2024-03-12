@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -8,35 +8,79 @@ struct Cli {
     command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, PartialEq, Debug)]
 enum Commands {
     /// SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time-seconds | PXAT unix-time-milliseconds | KEEPTTL]
     /// https://redis.io/commands/set/
     Set(SetArgs),
 }
 
-#[derive(Args)]
+#[derive(Args, PartialEq, Debug)]
 struct SetArgs {
     key: String,
     value: String,
-    #[arg(long)]
-    get: bool,
-    // ----
-    #[arg(long)]
-    nx: bool,
-    #[arg(long)]
-    xx: bool,
-    // ----
-    #[arg(long)]
-    ex: Option<u64>,
-    #[arg(long)]
-    px: Option<u64>,
-    #[arg(long)]
-    exat: Option<u64>,
-    #[arg(long)]
-    pxat: Option<u64>,
-    #[arg(long)]
-    keepttl: bool,
+    #[arg(value_enum)]
+    nxxx: Option<Nxxx>,
+    #[arg(value_enum)]
+    get: Option<Get>,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum Nxxx {
+    Nx,
+    Xx,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum Get {
+    Get,
+}
+
+#[test]
+fn test_parse() {
+    // arrange
+    let command_line = vec!["ignore", "set", "PP", "v"];
+    // act
+    let cli = Cli::parse_from(command_line);
+    // assert
+    let args = SetArgs {
+        key: "PP".to_string(),
+        value: "v".to_string(),
+        nxxx: None,
+        get: None,
+    };
+    assert_eq!(Commands::Set(args), cli.command);
+}
+
+#[test]
+fn test_parse2() {
+    // arrange
+    let command_line = vec!["ignore", "set", "PP", "v", "nx"];
+    // act
+    let cli = Cli::parse_from(command_line);
+    // assert
+    let args = SetArgs {
+        key: "PP".to_string(),
+        value: "v".to_string(),
+        nxxx: Some(Nxxx::Nx),
+        get: None,
+    };
+    assert_eq!(Commands::Set(args), cli.command);
+}
+#[test]
+fn test_parse3() {
+    // arrange
+    let command_line = vec!["ignore", "set", "PP", "v", "xx", "get"];
+    // act
+    let cli = Cli::parse_from(command_line);
+    // assert
+    let args = SetArgs {
+        key: "PP".to_string(),
+        value: "v".to_string(),
+        nxxx: Some(Nxxx::Xx),
+        get: Some(Get::Get),
+    };
+    assert_eq!(Commands::Set(args), cli.command);
 }
 
 fn main() {

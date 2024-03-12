@@ -1,5 +1,4 @@
-use crate::models::data_command::{Command, DataWatcherMessage};
-
+use crate::models::data_command::{Command, DataWatcherMessage, RespValueExt};
 use resp::Value;
 use tokio::sync::{mpsc, oneshot};
 
@@ -16,7 +15,7 @@ impl RedisProtocolAnalyzer {
     // return the encoded server result
     pub async fn apply(&self, client_input: &[u8]) -> Vec<u8> {
         let mut resp_decoder = resp::Decoder::new(std::io::BufReader::new(client_input));
-        if let Ok(v) = resp_decoder.decode() {
+        if let Ok(Value::Array(v)) = resp_decoder.decode() {
             match Self::parse(v) {
                 Ok(cmd) => {
                     let (callback_tx, callback_rx) = oneshot::channel();
@@ -38,16 +37,25 @@ impl RedisProtocolAnalyzer {
     }
 
     // parse resp array to command and value
-    fn parse(input_value: Value) -> Result<Command, Value> {
-        if let Value::Array(array) = input_value {
-            let command = Command::to_command(&array);
-            if Command::Unknown == command {
-                Result::Err(Value::Error("command parse error".to_string()))
-            } else {
-                Ok(command)
+    fn parse(cmd: Vec<Value>) -> Result<Command, Value> {
+        // command value or command key value
+        if cmd.len() < 2 {
+            return Result::Err(Value::Error("command parse error".to_string()));
+        }
+        match cmd[0].to_string().to_lowercase().as_str() {
+            "set" => {
+                if cmd.len() != 3 {
+                    Result::Err(Value::Error("command parse error".to_string()))
+                } else {
+                    Ok(Command::Set(cmd[1].to_string(), cmd[2].to_string()))
+                }
             }
-        } else {
-            Result::Err(Value::Error("command parse error".to_string()))
+            "get" => Ok(Command::Get(cmd[1].to_string())),
+            "del" => Ok(Command::Del(cmd[1].to_string())),
+            _ => Result::Err(Value::Error(format!(
+                "command {} not support",
+                cmd[0].to_string()
+            ))),
         }
     }
 }
@@ -80,11 +88,11 @@ async fn test_apply_set_command() {
 #[test]
 fn test_parse_command_set_key_with_value_string() {
     // arrange
-    let input_value = Value::Array(vec![
+    let input_value = vec![
         Value::Bulk("set".to_string()),
         Value::Bulk("key".to_string()),
         Value::Bulk("value".to_string()),
-    ]);
+    ];
     // act
     let r = RedisProtocolAnalyzer::parse(input_value);
     // assert
@@ -96,10 +104,10 @@ fn test_parse_command_set_key_with_value_string() {
 #[test]
 fn test_parse_command_get_key() {
     // arrange
-    let input_value = Value::Array(vec![
+    let input_value = vec![
         Value::Bulk("get".to_string()),
         Value::Bulk("key".to_string()),
-    ]);
+    ];
     // act
     let r = RedisProtocolAnalyzer::parse(input_value);
     // assert
@@ -111,10 +119,10 @@ fn test_parse_command_get_key() {
 #[test]
 fn test_parse_command_del_key() {
     // arrange
-    let input_value = Value::Array(vec![
+    let input_value = vec![
         Value::Bulk("del".to_string()),
         Value::Bulk("key".to_string()),
-    ]);
+    ];
     // act
     let r = RedisProtocolAnalyzer::parse(input_value);
     // assert

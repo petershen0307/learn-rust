@@ -6,28 +6,6 @@ pub enum Command {
     Set(String, String),
     Get(String),
     Del(String),
-    Unknown,
-}
-
-impl Command {
-    pub fn to_command(cmd: &[RValue]) -> Self {
-        // command value or command key value
-        if cmd.len() < 2 {
-            return Command::Unknown;
-        }
-        match cmd[0].to_string().to_lowercase().as_str() {
-            "set" => {
-                if cmd.len() != 3 {
-                    Command::Unknown
-                } else {
-                    Command::Set(cmd[1].to_string(), cmd[2].to_string())
-                }
-            }
-            "get" => Command::Get(cmd[1].to_string()),
-            "del" => Command::Del(cmd[1].to_string()),
-            _ => Command::Unknown,
-        }
-    }
 }
 
 pub trait RespValueExt {

@@ -2,11 +2,10 @@ pub mod cmd_command;
 pub mod cmd_del;
 pub mod cmd_get;
 pub mod cmd_set;
-pub mod command;
 
-use crate::data_watcher::message::DataWatcherMessage;
-use crate::redis_protocol::command::Command;
+use crate::data_watcher::{execution::Execution, message::DataWatcherMessage};
 
+use anyhow::Result;
 use resp::Value;
 use tokio::sync::{mpsc, oneshot};
 
@@ -45,7 +44,7 @@ impl RedisProtocolAnalyzer {
     }
 
     // parse resp array to command and value
-    fn parse(cmd: Vec<Value>) -> Result<Command, Value> {
+    fn parse(cmd: Vec<Value>) -> Result<Box<dyn Execution + Send>, Value> {
         // command value or command key value
         if cmd.len() < 2 {
             return Result::Err(Value::Error("command parse error".to_string()));
@@ -55,12 +54,15 @@ impl RedisProtocolAnalyzer {
                 if cmd.len() != 3 {
                     Result::Err(Value::Error("command parse error".to_string()))
                 } else {
-                    Ok(Command::Set(cmd[1].to_string(), cmd[2].to_string()))
+                    Ok(cmd_set::Set::parse(vec![
+                        cmd[1].to_string(),
+                        cmd[2].to_string(),
+                    ])?)
                 }
             }
-            "get" => Ok(Command::Get(cmd[1].to_string())),
-            "del" => Ok(Command::Del(cmd[1].to_string())),
-            "command" => Ok(Command::Cmd),
+            "get" => Ok(cmd_get::Get::parse(vec![cmd[1].to_string()])?),
+            "del" => Ok(cmd_del::Del::parse(vec![cmd[1].to_string()])?),
+            "command" => Ok(cmd_command::Command::parse(vec![cmd[1].to_string()])?),
             _ => Result::Err(Value::Error(format!(
                 "command {} not support",
                 cmd[0].to_string()
@@ -120,8 +122,6 @@ fn test_parse_command_set_key_with_value_string() {
     let r = RedisProtocolAnalyzer::parse(input_value);
     // assert
     assert!(r.is_ok());
-    let r = r.unwrap();
-    assert_eq!(Command::Set("key".to_string(), "value".to_string()), r);
 }
 
 #[test]
@@ -135,8 +135,6 @@ fn test_parse_command_get_key() {
     let r = RedisProtocolAnalyzer::parse(input_value);
     // assert
     assert!(r.is_ok());
-    let r = r.unwrap();
-    assert_eq!(Command::Get("key".to_string()), r);
 }
 
 #[test]
@@ -150,6 +148,4 @@ fn test_parse_command_del_key() {
     let r = RedisProtocolAnalyzer::parse(input_value);
     // assert
     assert!(r.is_ok());
-    let r = r.unwrap();
-    assert_eq!(Command::Del("key".to_string()), r);
 }

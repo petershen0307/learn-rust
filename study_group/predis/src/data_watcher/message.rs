@@ -1,10 +1,10 @@
-use crate::redis_protocol::command::Command;
+use crate::data_watcher::execution;
 
 use resp::Value;
 use tokio::sync::oneshot;
 
 // communicate with data watcher
 pub struct DataWatcherMessage {
-    pub data: Command,
+    pub data: Box<dyn execution::Execution + Send>,
     pub callback: oneshot::Sender<Value>,
 }

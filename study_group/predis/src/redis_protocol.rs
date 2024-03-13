@@ -56,6 +56,7 @@ impl RedisProtocolAnalyzer {
             }
             "get" => Ok(Command::Get(cmd[1].to_string())),
             "del" => Ok(Command::Del(cmd[1].to_string())),
+            "command" => Ok(Command::Cmd),
             _ => Result::Err(Value::Error(format!(
                 "command {} not support",
                 cmd[0].to_string()

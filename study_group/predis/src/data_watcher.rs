@@ -1,6 +1,8 @@
+pub mod message;
 use std::collections::HashMap;
 
-use crate::models::data_command::{Command, DataWatcherMessage};
+use crate::data_watcher::message::DataWatcherMessage;
+use crate::redis_protocol::command::Command;
 
 pub async fn new(mut rx: tokio::sync::mpsc::Receiver<DataWatcherMessage>) {
     // create data watcher
@@ -20,7 +22,6 @@ pub async fn new(mut rx: tokio::sync::mpsc::Receiver<DataWatcherMessage>) {
                     Some(_) => resp::Value::Integer(1),
                     None => resp::Value::Integer(0),
                 },
-                _ => resp::Value::Error("ERR unknown command".to_string()),
             };
             r.callback.send(response).unwrap();
         }

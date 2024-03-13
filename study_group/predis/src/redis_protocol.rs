@@ -1,4 +1,8 @@
-use crate::models::data_command::{Command, DataWatcherMessage, RespValueExt};
+pub mod command;
+
+use crate::data_watcher::message::DataWatcherMessage;
+use crate::redis_protocol::command::Command;
+
 use resp::Value;
 use tokio::sync::{mpsc, oneshot};
 
@@ -56,6 +60,20 @@ impl RedisProtocolAnalyzer {
                 "command {} not support",
                 cmd[0].to_string()
             ))),
+        }
+    }
+}
+
+pub trait RespValueExt {
+    fn to_string(&self) -> String;
+}
+
+impl RespValueExt for Value {
+    fn to_string(&self) -> String {
+        match self {
+            Value::String(s) => s.clone(),
+            Value::Bulk(s) => s.clone(),
+            _ => String::new(),
         }
     }
 }

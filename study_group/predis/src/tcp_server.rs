@@ -1,7 +1,7 @@
 pub mod graceful_shutdown;
 pub mod tcp_stream_handler;
 
-use crate::{models::data_command::DataWatcherMessage, tcp_server};
+use crate::{data_watcher::message::DataWatcherMessage, tcp_server};
 
 use std::sync::Arc;
 

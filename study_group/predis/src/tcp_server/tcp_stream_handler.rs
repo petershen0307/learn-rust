@@ -1,4 +1,4 @@
-use crate::models::data_command::DataWatcherMessage;
+use crate::data_watcher::message::DataWatcherMessage;
 use crate::redis_protocol::RedisProtocolAnalyzer;
 
 use log::{debug, error, info};

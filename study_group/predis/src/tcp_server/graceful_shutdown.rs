@@ -1,6 +1,6 @@
 use std::thread;
 
-use log::{debug, error, info};
+use log::{error, info};
 use tokio::{signal, sync::broadcast::error::SendError};
 
 // zero size data type: https://doc.rust-lang.org/nomicon/exotic-sizes.html

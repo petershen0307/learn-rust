@@ -1,8 +1,8 @@
 use std::os::fd::AsRawFd;
 
 use predis::{
-    data_watcher,
-    models::{configuration::Configuration, data_command::DataWatcherMessage},
+    configuration::Configuration,
+    data_watcher::{self, message::DataWatcherMessage},
     tcp_server::graceful_shutdown,
 };
 
@@ -12,7 +12,7 @@ use tokio::{net::TcpListener, sync::mpsc};
 #[tokio::main]
 async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
-    let config = predis::models::configuration::Configuration::new();
+    let config = Configuration::new();
     predis_server(config).await;
     // tcp server
     // import library https://docs.rs/resp/latest/resp/struct.Decoder.html

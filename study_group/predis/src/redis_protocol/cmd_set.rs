@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::data_watcher::execution::Execution;
 use crate::data_watcher::DataStorage;
 
@@ -11,7 +13,7 @@ pub struct Set {
 }
 
 impl Set {
-    pub fn parse(input: Vec<String>) -> Result<Box<Self>, Value> {
+    pub fn parse(input: VecDeque<String>) -> Result<Box<Self>, Value> {
         if input.len() != 2 {
             return Result::Err(Value::Error("command parse error".to_string()));
         }

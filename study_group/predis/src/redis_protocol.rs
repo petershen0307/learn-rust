@@ -3,6 +3,8 @@ pub mod cmd_del;
 pub mod cmd_get;
 pub mod cmd_set;
 
+use std::collections::VecDeque;
+
 use crate::data_watcher::{execution::Execution, message::DataWatcherMessage};
 
 use anyhow::Result;
@@ -49,24 +51,16 @@ impl RedisProtocolAnalyzer {
         if cmd.len() < 2 {
             return Result::Err(Value::Error("command parse error".to_string()));
         }
-        match cmd[0].to_string().to_lowercase().as_str() {
-            "set" => {
-                if cmd.len() != 3 {
-                    Result::Err(Value::Error("command parse error".to_string()))
-                } else {
-                    Ok(cmd_set::Set::parse(vec![
-                        cmd[1].to_string(),
-                        cmd[2].to_string(),
-                    ])?)
-                }
-            }
-            "get" => Ok(cmd_get::Get::parse(vec![cmd[1].to_string()])?),
-            "del" => Ok(cmd_del::Del::parse(vec![cmd[1].to_string()])?),
-            "command" => Ok(cmd_command::Command::parse(vec![cmd[1].to_string()])?),
-            _ => Result::Err(Value::Error(format!(
-                "command {} not support",
-                cmd[0].to_string()
-            ))),
+        // convert to Vec<String> then change to VecDeque
+        let cmd: Vec<String> = cmd.iter().map(|x| x.to_string()).collect();
+        let mut cmd = VecDeque::from(cmd);
+        let command = cmd.pop_front().unwrap().to_lowercase();
+        match command.as_str() {
+            "set" => Ok(cmd_set::Set::parse(cmd)?),
+            "get" => Ok(cmd_get::Get::parse(cmd)?),
+            "del" => Ok(cmd_del::Del::parse(cmd)?),
+            "command" => Ok(cmd_command::Command::parse(cmd)?),
+            _ => Result::Err(Value::Error(format!("command {} not support", command))),
         }
     }
 }

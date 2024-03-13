@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::io::BufReader;
 
 use crate::data_watcher::execution::Execution;
@@ -15,7 +16,7 @@ impl Command {
     pub const DOCS_DEL: &'static str = "*2\r\n$3\r\ndel\r\n*10\r\n$7\r\nsummary\r\n$25\r\nDeletes one or more keys.\r\n$5\r\nsince\r\n$5\r\n1.0.0\r\n$5\r\ngroup\r\n$7\r\ngeneric\r\n$10\r\ncomplexity\r\n$288\r\nO(N) where N is the number of keys that will be removed. When a key to remove holds a value other than a string, the individual complexity for this key is O(M) where M is the number of elements in the list, set, sorted set or hash. Removing a single key that holds a string value is O(1).\r\n$9\r\narguments\r\n*1\r\n*10\r\n$4\r\nname\r\n$3\r\nkey\r\n$4\r\ntype\r\n$3\r\nkey\r\n$12\r\ndisplay_text\r\n$3\r\nkey\r\n$14\r\nkey_spec_index\r\n:0\r\n$5\r\nflags\r\n*1\r\n+multiple\r\n";
     pub const DOCS: [&'static str; 3] = [Command::DOCS_SET, Command::DOCS_GET, Command::DOCS_DEL];
 
-    pub fn parse(_: Vec<String>) -> Result<Box<Self>, Value> {
+    pub fn parse(_: VecDeque<String>) -> Result<Box<Self>, Value> {
         Ok(Box::default())
     }
 }

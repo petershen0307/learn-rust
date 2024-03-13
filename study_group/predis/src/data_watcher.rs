@@ -1,4 +1,6 @@
+pub mod execution;
 pub mod message;
+
 use std::collections::HashMap;
 use std::io::BufReader;
 
@@ -7,10 +9,12 @@ use crate::redis_protocol::command::{self, Command};
 
 use resp::Value;
 
+pub type DataStorage = HashMap<String, String>;
+
 pub async fn new(mut rx: tokio::sync::mpsc::Receiver<DataWatcherMessage>) {
     // create data watcher
     tokio::spawn(async move {
-        let mut map = HashMap::<String, String>::new();
+        let mut map = DataStorage::new();
         while let Some(r) = rx.recv().await {
             let response = match r.data {
                 Command::Set(k, v) => {

@@ -1,3 +1,4 @@
+pub mod cmd_command;
 pub mod command;
 
 use crate::data_watcher::message::DataWatcherMessage;

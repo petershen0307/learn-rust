@@ -14,6 +14,7 @@ pub struct Set {
     value: String,
     get: Option<()>,
     ttl_state: Option<TTLState>,
+    key_exist_then_insert: Option<bool>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -45,10 +46,10 @@ impl Set {
                             set_obj.ttl_state =
                                 Some(TTLState::Ex(time::Duration::from_secs(ttl_u64)));
                         } else {
-                            return Err(Value::Error("ex value is not integer".to_string()));
+                            return Err(Value::Error(format!("{} value is not integer", token)));
                         }
                     } else {
-                        return Err(Value::Error("ex without value".to_string()));
+                        return Err(Value::Error(format!("{} without value", token)));
                     }
                 }
                 "px" => {
@@ -58,10 +59,10 @@ impl Set {
                             set_obj.ttl_state =
                                 Some(TTLState::Px(time::Duration::from_millis(ttl_u64)));
                         } else {
-                            return Err(Value::Error("px value is not integer".to_string()));
+                            return Err(Value::Error(format!("{} value is not integer", token)));
                         }
                     } else {
-                        return Err(Value::Error("px without value".to_string()));
+                        return Err(Value::Error(format!("{} without value", token)));
                     }
                 }
                 "exat" => {
@@ -71,10 +72,10 @@ impl Set {
                             set_obj.ttl_state =
                                 Some(TTLState::Exat(time::Duration::from_secs(ttl_u64)));
                         } else {
-                            return Err(Value::Error("exat value is not integer".to_string()));
+                            return Err(Value::Error(format!("{} value is not integer", token)));
                         }
                     } else {
-                        return Err(Value::Error("exat without value".to_string()));
+                        return Err(Value::Error(format!("{} without value", token)));
                     }
                 }
                 "pxat" => {
@@ -84,17 +85,21 @@ impl Set {
                             set_obj.ttl_state =
                                 Some(TTLState::Pxat(time::Duration::from_millis(ttl_u64)));
                         } else {
-                            return Err(Value::Error("pxat value is not integer".to_string()));
+                            return Err(Value::Error(format!("{} value is not integer", token)));
                         }
                     } else {
-                        return Err(Value::Error("pxat without value".to_string()));
+                        return Err(Value::Error(format!("{} without value", token)));
                     }
                 }
                 "keepttl" => {
                     // KEEPTTL -- Retain the time to live associated with the key.
                     set_obj.ttl_state = Some(TTLState::KeepTTL)
                 }
-                _ => {}
+                "nx" => set_obj.key_exist_then_insert = Some(false),
+                "xx" => set_obj.key_exist_then_insert = Some(true),
+                _ => {
+                    return Err(Value::Error(format!("{} unknown option", token)));
+                }
             }
         }
         Ok(Box::new(set_obj))
@@ -113,6 +118,13 @@ impl Execution for Set {
             Value::String("ok".to_string())
         };
         let mut data_ttl = DataTTL::new(self.value.to_owned());
+        // handle key exist
+        if let Some(key_exist_then_insert) = &self.key_exist_then_insert {
+            if *key_exist_then_insert != data.get(&self.key).is_some() {
+                return Value::Null;
+            }
+        }
+        // handle data ttl
         if let Some(ttl_state) = &self.ttl_state {
             data_ttl = match ttl_state {
                 TTLState::Ex(s) => data_ttl.ttl(s),
@@ -135,12 +147,10 @@ impl Execution for Set {
 
 #[cfg(test)]
 mod test_parse {
+    use super::Set;
+    use crate::redis_protocol::cmd_set::TTLState;
     use core::time;
     use std::collections::VecDeque;
-
-    use crate::redis_protocol::cmd_set::TTLState;
-
-    use super::Set;
 
     #[test]
     fn test_parse_success() {
@@ -187,6 +197,7 @@ mod test_parse {
             value: "v".to_string(),
             get: Some(()),
             ttl_state: Some(TTLState::Ex(time::Duration::from_secs(5))),
+            ..Default::default()
         };
         // act
         let result = Set::parse(input);
@@ -205,6 +216,45 @@ mod test_parse {
             value: "v".to_string(),
             get: Some(()),
             ttl_state: Some(TTLState::Px(time::Duration::from_millis(5))),
+            ..Default::default()
+        };
+        // act
+        let result = Set::parse(input);
+        // assert
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(Box::new(expected), result);
+    }
+    #[test]
+    fn test_parse_get_pxat_xx_success() {
+        // arrange
+        let input = VecDeque::from(vec!["k", "v", "get", "pxat", "5", "xx"]);
+        let input = input.iter().map(|x| x.to_string()).collect();
+        let expected = Set {
+            key: "k".to_string(),
+            value: "v".to_string(),
+            get: Some(()),
+            ttl_state: Some(TTLState::Pxat(time::Duration::from_millis(5))),
+            key_exist_then_insert: Some(true),
+        };
+        // act
+        let result = Set::parse(input);
+        // assert
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(Box::new(expected), result);
+    }
+    #[test]
+    fn test_parse_get_exat_nx_success() {
+        // arrange
+        let input = VecDeque::from(vec!["k", "v", "get", "exat", "5", "nx"]);
+        let input = input.iter().map(|x| x.to_string()).collect();
+        let expected = Set {
+            key: "k".to_string(),
+            value: "v".to_string(),
+            get: Some(()),
+            ttl_state: Some(TTLState::Exat(time::Duration::from_secs(5))),
+            key_exist_then_insert: Some(false),
         };
         // act
         let result = Set::parse(input);
@@ -219,7 +269,7 @@ mod test_parse {
 mod test_exec {
     use super::Set;
     use crate::{
-        data_watcher::{execution::Execution, DataStorage},
+        data_watcher::{execution::Execution, DataStorage, DataTTL},
         redis_protocol::cmd_set::TTLState,
     };
     use resp::Value;
@@ -353,5 +403,80 @@ mod test_exec {
         assert_eq!(set_obj.value, output.get().unwrap());
         thread::sleep(ttl);
         assert!(output.get().is_none());
+    }
+    #[test]
+    fn test_exec_xx_success() {
+        // arrange
+        let set_obj = Set {
+            key: "k".to_string(),
+            value: "v".to_string(),
+            key_exist_then_insert: Some(true),
+            ..Default::default()
+        };
+        let mut data = DataStorage::new();
+        data.insert(set_obj.key.to_owned(), DataTTL::new("some v".to_string()));
+
+        // act
+        let result = set_obj.exec(&mut data);
+        // assert
+        assert_eq!(Value::String("ok".to_string()), result);
+        let output = data.get(&set_obj.key).unwrap();
+        assert_eq!(set_obj.value, output.get().unwrap());
+    }
+    #[test]
+    fn test_exec_xx_failed() {
+        // arrange
+        let set_obj = Set {
+            key: "k".to_string(),
+            value: "v".to_string(),
+            key_exist_then_insert: Some(true),
+            ..Default::default()
+        };
+        let mut data = DataStorage::new();
+
+        // act
+        let result = set_obj.exec(&mut data);
+        // assert
+        assert_eq!(Value::Null, result);
+        assert!(data.get(&set_obj.key).is_none());
+    }
+    #[test]
+    fn test_exec_nx_failed() {
+        // arrange
+        let set_obj = Set {
+            key: "k".to_string(),
+            value: "v".to_string(),
+            key_exist_then_insert: Some(false),
+            ..Default::default()
+        };
+        let mut data = DataStorage::new();
+        data.insert(set_obj.key.to_owned(), DataTTL::new("some v".to_string()));
+
+        // act
+        let result = set_obj.exec(&mut data);
+        // assert
+        assert_eq!(Value::Null, result);
+        assert_eq!(
+            "some v".to_string(),
+            data.get(&set_obj.key).unwrap().get().unwrap()
+        );
+    }
+    #[test]
+    fn test_exec_nx_success() {
+        // arrange
+        let set_obj = Set {
+            key: "k".to_string(),
+            value: "v".to_string(),
+            key_exist_then_insert: Some(false),
+            ..Default::default()
+        };
+        let mut data = DataStorage::new();
+
+        // act
+        let result = set_obj.exec(&mut data);
+        // assert
+        assert_eq!(Value::String("ok".to_string()), result);
+        let output = data.get(&set_obj.key).unwrap();
+        assert_eq!(set_obj.value, output.get().unwrap());
     }
 }

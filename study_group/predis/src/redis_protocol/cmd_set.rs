@@ -7,13 +7,22 @@ use crate::data_watcher::{DataStorage, DataTTL};
 use anyhow::Result;
 use resp::Value;
 
-//https://redis.io/commands/set/
+// https://redis.io/commands/set/
 #[derive(Default, PartialEq, Debug)]
 pub struct Set {
     key: String,
     value: String,
     get: Option<()>,
-    ttl: Option<time::Duration>,
+    ttl_state: Option<TTLState>,
+}
+
+#[derive(PartialEq, Debug)]
+enum TTLState {
+    Ex(time::Duration),
+    Px(time::Duration),
+    Exat(time::Duration),
+    Pxat(time::Duration),
+    KeepTTL,
 }
 
 impl Set {
@@ -33,7 +42,8 @@ impl Set {
                     // EX seconds -- Set the specified expire time, in seconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
-                            set_obj.ttl = Some(time::Duration::from_secs(ttl_u64));
+                            set_obj.ttl_state =
+                                Some(TTLState::Ex(time::Duration::from_secs(ttl_u64)));
                         } else {
                             return Err(Value::Error("ex value is not integer".to_string()));
                         }
@@ -45,13 +55,44 @@ impl Set {
                     // PX milliseconds -- Set the specified expire time, in milliseconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
-                            set_obj.ttl = Some(time::Duration::from_millis(ttl_u64));
+                            set_obj.ttl_state =
+                                Some(TTLState::Px(time::Duration::from_millis(ttl_u64)));
                         } else {
                             return Err(Value::Error("px value is not integer".to_string()));
                         }
                     } else {
                         return Err(Value::Error("px without value".to_string()));
                     }
+                }
+                "exat" => {
+                    // EXAT timestamp-seconds -- Set the specified Unix time at which the key will expire, in seconds (a positive integer).
+                    if let Some(ttl) = input.pop_front() {
+                        if let Ok(ttl_u64) = ttl.parse::<u64>() {
+                            set_obj.ttl_state =
+                                Some(TTLState::Exat(time::Duration::from_secs(ttl_u64)));
+                        } else {
+                            return Err(Value::Error("exat value is not integer".to_string()));
+                        }
+                    } else {
+                        return Err(Value::Error("exat without value".to_string()));
+                    }
+                }
+                "pxat" => {
+                    // PXAT timestamp-milliseconds -- Set the specified Unix time at which the key will expire, in milliseconds (a positive integer).
+                    if let Some(ttl) = input.pop_front() {
+                        if let Ok(ttl_u64) = ttl.parse::<u64>() {
+                            set_obj.ttl_state =
+                                Some(TTLState::Pxat(time::Duration::from_millis(ttl_u64)));
+                        } else {
+                            return Err(Value::Error("pxat value is not integer".to_string()));
+                        }
+                    } else {
+                        return Err(Value::Error("pxat without value".to_string()));
+                    }
+                }
+                "keepttl" => {
+                    // KEEPTTL -- Retain the time to live associated with the key.
+                    set_obj.ttl_state = Some(TTLState::KeepTTL)
                 }
                 _ => {}
             }
@@ -72,8 +113,20 @@ impl Execution for Set {
             Value::String("ok".to_string())
         };
         let mut data_ttl = DataTTL::new(self.value.to_owned());
-        if self.ttl.is_some() {
-            data_ttl = data_ttl.ttl(self.ttl.unwrap());
+        if let Some(ttl_state) = &self.ttl_state {
+            data_ttl = match ttl_state {
+                TTLState::Ex(s) => data_ttl.ttl(s),
+                TTLState::Px(m) => data_ttl.ttl(m),
+                TTLState::Exat(s) => data_ttl.expired(s),
+                TTLState::Pxat(m) => data_ttl.expired(m),
+                TTLState::KeepTTL => {
+                    if let Some(v) = data.get(&self.key) {
+                        v.to_owned().update(self.value.to_owned())
+                    } else {
+                        data_ttl
+                    }
+                }
+            }
         }
         data.insert(self.key.to_owned(), data_ttl);
         return_value
@@ -84,6 +137,8 @@ impl Execution for Set {
 mod test_parse {
     use core::time;
     use std::collections::VecDeque;
+
+    use crate::redis_protocol::cmd_set::TTLState;
 
     use super::Set;
 
@@ -131,7 +186,7 @@ mod test_parse {
             key: "k".to_string(),
             value: "v".to_string(),
             get: Some(()),
-            ttl: Some(time::Duration::from_secs(5)),
+            ttl_state: Some(TTLState::Ex(time::Duration::from_secs(5))),
         };
         // act
         let result = Set::parse(input);
@@ -149,7 +204,7 @@ mod test_parse {
             key: "k".to_string(),
             value: "v".to_string(),
             get: Some(()),
-            ttl: Some(time::Duration::from_millis(5)),
+            ttl_state: Some(TTLState::Px(time::Duration::from_millis(5))),
         };
         // act
         let result = Set::parse(input);
@@ -163,19 +218,15 @@ mod test_parse {
 #[cfg(test)]
 mod test_exec {
     use super::Set;
-    use crate::data_watcher::{execution::Execution, DataStorage, DataTTL};
+    use crate::{
+        data_watcher::{execution::Execution, DataStorage},
+        redis_protocol::cmd_set::TTLState,
+    };
     use resp::Value;
-    use std::time;
-
-    trait GetEx {
-        fn get_ex(&self) -> DataTTL;
-    }
-
-    impl GetEx for DataTTL {
-        fn get_ex(&self) -> DataTTL {
-            self.clone()
-        }
-    }
+    use std::{
+        thread,
+        time::{self, UNIX_EPOCH},
+    };
 
     #[test]
     fn test_exec_success() {
@@ -231,25 +282,76 @@ mod test_exec {
     #[test]
     fn test_exec_ttl_success() {
         // arrange
-        let ttl = time::Duration::from_secs(5);
+        let ttl = time::Duration::from_secs(1);
         let set_obj = Set {
             key: "k".to_string(),
             value: "v".to_string(),
-            ttl: Some(ttl),
+            ttl_state: Some(TTLState::Ex(ttl.to_owned())),
             ..Default::default()
         };
         let mut data = DataStorage::new();
-        let mut expected_data_ttl = DataTTL::new(set_obj.value.to_owned());
-        expected_data_ttl = expected_data_ttl
-            .ttl(ttl)
-            .expired(time::Duration::default());
 
         // act
         let result = set_obj.exec(&mut data);
         // assert
         assert_eq!(Value::String("ok".to_string()), result);
-        let mut output = data.get(&set_obj.key).unwrap().get_ex();
-        output = output.expired(time::Duration::default());
-        assert_eq!(expected_data_ttl, output);
+        let output = data.get(&set_obj.key).unwrap();
+        assert_eq!(set_obj.value, output.get().unwrap());
+        thread::sleep(ttl);
+        assert!(output.get().is_none());
+    }
+    #[test]
+    fn test_exec_keep_ttl_success() {
+        // arrange
+        let ttl = time::Duration::from_secs(1);
+        let set_obj = Set {
+            key: "k".to_string(),
+            value: "v".to_string(),
+            ttl_state: Some(TTLState::Exat(
+                time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap() + ttl,
+            )),
+            ..Default::default()
+        };
+        let set_obj2 = Set {
+            key: "k".to_string(),
+            value: "v2".to_string(),
+            ttl_state: Some(TTLState::KeepTTL),
+            ..Default::default()
+        };
+        let mut data = DataStorage::new();
+
+        // act
+        let result = set_obj.exec(&mut data);
+        assert_eq!(Value::String("ok".to_string()), result);
+        let result = set_obj2.exec(&mut data);
+        assert_eq!(Value::String("ok".to_string()), result);
+        // assert
+        let output = data.get(&set_obj2.key).unwrap();
+        assert_eq!(set_obj2.value, output.get().unwrap());
+        thread::sleep(ttl);
+        assert!(output.get().is_none());
+    }
+    #[test]
+    fn test_exec_ttl_pxat_success() {
+        // arrange
+        let ttl = time::Duration::from_secs(1);
+        let set_obj = Set {
+            key: "k".to_string(),
+            value: "v".to_string(),
+            ttl_state: Some(TTLState::Pxat(
+                time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap() + ttl,
+            )),
+            ..Default::default()
+        };
+        let mut data = DataStorage::new();
+
+        // act
+        let result = set_obj.exec(&mut data);
+        // assert
+        assert_eq!(Value::String("ok".to_string()), result);
+        let output = data.get(&set_obj.key).unwrap();
+        assert_eq!(set_obj.value, output.get().unwrap());
+        thread::sleep(ttl);
+        assert!(output.get().is_none());
     }
 }

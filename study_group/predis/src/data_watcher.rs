@@ -24,18 +24,23 @@ impl DataTTL {
         }
     }
 
-    pub fn ttl(mut self, ttl: time::Duration) -> Self {
+    pub fn update(mut self, value: String) -> Self {
+        self.value = value;
+        self
+    }
+
+    pub fn ttl(mut self, ttl: &time::Duration) -> Self {
         self.expired_epoch = Some(
             time::SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
-                + ttl,
+                + *ttl,
         );
         self
     }
 
-    pub fn expired(mut self, expired: time::Duration) -> Self {
-        self.expired_epoch = Some(expired);
+    pub fn expired(mut self, expired: &time::Duration) -> Self {
+        self.expired_epoch = Some(*expired);
         self
     }
 

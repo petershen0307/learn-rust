@@ -46,10 +46,7 @@ impl Execution for Set {
         } else {
             Value::String("ok".to_string())
         };
-        data.insert(
-            self.key.to_owned(),
-            DataTTL::new(self.value.to_owned(), time::Duration::default()),
-        );
+        data.insert(self.key.to_owned(), DataTTL::new(self.value.to_owned()));
         return_value
     }
 }

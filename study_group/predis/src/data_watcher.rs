@@ -1,32 +1,57 @@
 pub mod execution;
 pub mod message;
 
-use std::{collections::HashMap, time};
+use std::{
+    collections::HashMap,
+    time::{self, UNIX_EPOCH},
+};
 
 use crate::data_watcher::message::DataWatcherMessage;
 
 pub type DataStorage = HashMap<String, DataTTL>;
 
+#[derive(Default)]
 pub struct DataTTL {
     value: String,
-    ttl: time::Duration,
-    expired: time::SystemTime,
+    ttl: Option<time::Duration>,
+    expired_epoch: Option<time::Duration>,
 }
 
 impl DataTTL {
-    pub fn new(value: String, ttl: time::Duration) -> Self {
+    pub fn new(value: String) -> Self {
         DataTTL {
             value,
-            ttl,
-            expired: time::SystemTime::now() + ttl,
+            ..Default::default()
         }
     }
+
+    pub fn ttl(mut self, ttl: time::Duration) -> Self {
+        self.ttl = Some(ttl);
+        self.expired_epoch = Some(
+            time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                + ttl,
+        );
+        self
+    }
+
+    pub fn expired(mut self, expired: time::Duration) -> Self {
+        self.expired_epoch = Some(expired);
+        self
+    }
+
     pub fn get(&self) -> Option<String> {
-        if self.ttl != time::Duration::default() && time::SystemTime::now() > self.expired {
-            None
-        } else {
-            Some(self.value.to_owned())
+        if let Some(expired) = self.expired_epoch {
+            if time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                > expired
+            {
+                return None;
+            }
         }
+        Some(self.value.to_owned())
     }
 }
 

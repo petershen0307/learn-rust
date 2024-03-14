@@ -25,8 +25,8 @@ impl Get {
 impl Execution for Get {
     fn exec(&self, data: &mut DataStorage) -> Value {
         match data.get(&self.key) {
-            Some(dataTTL) => {
-                if let Some(v) = dataTTL.get() {
+            Some(data_ttl) => {
+                if let Some(v) = data_ttl.get() {
                     Value::String(v)
                 } else {
                     // data expired

@@ -13,7 +13,6 @@ pub type DataStorage = HashMap<String, DataTTL>;
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct DataTTL {
     value: String,
-    ttl: Option<time::Duration>,
     expired_epoch: Option<time::Duration>,
 }
 
@@ -26,7 +25,6 @@ impl DataTTL {
     }
 
     pub fn ttl(mut self, ttl: time::Duration) -> Self {
-        self.ttl = Some(ttl);
         self.expired_epoch = Some(
             time::SystemTime::now()
                 .duration_since(UNIX_EPOCH)

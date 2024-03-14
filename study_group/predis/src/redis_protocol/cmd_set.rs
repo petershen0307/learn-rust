@@ -19,10 +19,8 @@ pub struct Set {
 
 #[derive(PartialEq, Debug)]
 enum TTLState {
-    Ex(time::Duration),
-    Px(time::Duration),
-    Exat(time::Duration),
-    Pxat(time::Duration),
+    Ttl(time::Duration),
+    ExpiredTimestamp(time::Duration),
     KeepTTL,
 }
 
@@ -44,7 +42,7 @@ impl Set {
                     if let Some(ttl) = input.pop_front() {
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state =
-                                Some(TTLState::Ex(time::Duration::from_secs(ttl_u64)));
+                                Some(TTLState::Ttl(time::Duration::from_secs(ttl_u64)));
                         } else {
                             return Err(Value::Error(format!("{} value is not integer", token)));
                         }
@@ -57,7 +55,7 @@ impl Set {
                     if let Some(ttl) = input.pop_front() {
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state =
-                                Some(TTLState::Px(time::Duration::from_millis(ttl_u64)));
+                                Some(TTLState::Ttl(time::Duration::from_millis(ttl_u64)));
                         } else {
                             return Err(Value::Error(format!("{} value is not integer", token)));
                         }
@@ -69,8 +67,9 @@ impl Set {
                     // EXAT timestamp-seconds -- Set the specified Unix time at which the key will expire, in seconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
-                            set_obj.ttl_state =
-                                Some(TTLState::Exat(time::Duration::from_secs(ttl_u64)));
+                            set_obj.ttl_state = Some(TTLState::ExpiredTimestamp(
+                                time::Duration::from_secs(ttl_u64),
+                            ));
                         } else {
                             return Err(Value::Error(format!("{} value is not integer", token)));
                         }
@@ -82,8 +81,9 @@ impl Set {
                     // PXAT timestamp-milliseconds -- Set the specified Unix time at which the key will expire, in milliseconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
-                            set_obj.ttl_state =
-                                Some(TTLState::Pxat(time::Duration::from_millis(ttl_u64)));
+                            set_obj.ttl_state = Some(TTLState::ExpiredTimestamp(
+                                time::Duration::from_millis(ttl_u64),
+                            ));
                         } else {
                             return Err(Value::Error(format!("{} value is not integer", token)));
                         }
@@ -127,10 +127,8 @@ impl Execution for Set {
         // handle data ttl
         if let Some(ttl_state) = &self.ttl_state {
             data_ttl = match ttl_state {
-                TTLState::Ex(s) => data_ttl.ttl(s),
-                TTLState::Px(m) => data_ttl.ttl(m),
-                TTLState::Exat(s) => data_ttl.expired(s),
-                TTLState::Pxat(m) => data_ttl.expired(m),
+                TTLState::Ttl(d) => data_ttl.ttl(d),
+                TTLState::ExpiredTimestamp(d) => data_ttl.expired_timestamp(d),
                 TTLState::KeepTTL => {
                     if let Some(v) = data.get(&self.key) {
                         v.to_owned().update(self.value.to_owned())
@@ -196,7 +194,7 @@ mod test_parse {
             key: "k".to_string(),
             value: "v".to_string(),
             get: Some(()),
-            ttl_state: Some(TTLState::Ex(time::Duration::from_secs(5))),
+            ttl_state: Some(TTLState::Ttl(time::Duration::from_secs(5))),
             ..Default::default()
         };
         // act
@@ -215,7 +213,7 @@ mod test_parse {
             key: "k".to_string(),
             value: "v".to_string(),
             get: Some(()),
-            ttl_state: Some(TTLState::Px(time::Duration::from_millis(5))),
+            ttl_state: Some(TTLState::Ttl(time::Duration::from_millis(5))),
             ..Default::default()
         };
         // act
@@ -234,7 +232,7 @@ mod test_parse {
             key: "k".to_string(),
             value: "v".to_string(),
             get: Some(()),
-            ttl_state: Some(TTLState::Pxat(time::Duration::from_millis(5))),
+            ttl_state: Some(TTLState::ExpiredTimestamp(time::Duration::from_millis(5))),
             key_exist_then_insert: Some(true),
         };
         // act
@@ -253,7 +251,7 @@ mod test_parse {
             key: "k".to_string(),
             value: "v".to_string(),
             get: Some(()),
-            ttl_state: Some(TTLState::Exat(time::Duration::from_secs(5))),
+            ttl_state: Some(TTLState::ExpiredTimestamp(time::Duration::from_secs(5))),
             key_exist_then_insert: Some(false),
         };
         // act
@@ -336,7 +334,7 @@ mod test_exec {
         let set_obj = Set {
             key: "k".to_string(),
             value: "v".to_string(),
-            ttl_state: Some(TTLState::Ex(ttl.to_owned())),
+            ttl_state: Some(TTLState::Ttl(ttl.to_owned())),
             ..Default::default()
         };
         let mut data = DataStorage::new();
@@ -357,7 +355,7 @@ mod test_exec {
         let set_obj = Set {
             key: "k".to_string(),
             value: "v".to_string(),
-            ttl_state: Some(TTLState::Exat(
+            ttl_state: Some(TTLState::ExpiredTimestamp(
                 time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap() + ttl,
             )),
             ..Default::default()
@@ -388,7 +386,7 @@ mod test_exec {
         let set_obj = Set {
             key: "k".to_string(),
             value: "v".to_string(),
-            ttl_state: Some(TTLState::Pxat(
+            ttl_state: Some(TTLState::ExpiredTimestamp(
                 time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap() + ttl,
             )),
             ..Default::default()

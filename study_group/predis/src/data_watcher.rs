@@ -39,7 +39,7 @@ impl DataTTL {
         self
     }
 
-    pub fn expired(mut self, expired: &time::Duration) -> Self {
+    pub fn expired_timestamp(mut self, expired: &time::Duration) -> Self {
         self.expired_epoch = Some(*expired);
         self
     }

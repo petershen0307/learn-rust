@@ -10,7 +10,7 @@ use crate::data_watcher::message::DataWatcherMessage;
 
 pub type DataStorage = HashMap<String, DataTTL>;
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Clone, Debug)]
 pub struct DataTTL {
     value: String,
     ttl: Option<time::Duration>,

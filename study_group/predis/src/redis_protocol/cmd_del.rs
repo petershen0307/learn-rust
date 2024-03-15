@@ -8,25 +8,24 @@ use resp::Value;
 
 #[derive(Default, PartialEq, Debug)]
 pub struct Del {
-    key: String,
+    key: VecDeque<String>,
 }
 
 impl Del {
     pub fn parse(input: VecDeque<String>) -> Result<Box<Self>, Value> {
-        if input.len() != 1 {
-            return Result::Err(Value::Error("command parse error".to_string()));
-        }
-        Ok(Box::new(Del {
-            key: input[0].to_owned(),
-        }))
+        Ok(Box::new(Del { key: input }))
     }
 }
 
 impl Execution for Del {
     fn exec(&self, data: &mut DataStorage) -> Value {
-        match data.remove(&self.key) {
-            Some(_) => Value::Integer(1),
-            None => Value::Integer(0),
+        let mut result = 0;
+        let mut keys = self.key.clone();
+        while let Some(key) = keys.pop_front() {
+            if data.remove(&key).is_some() {
+                result += 1;
+            }
         }
+        Value::Integer(result)
     }
 }

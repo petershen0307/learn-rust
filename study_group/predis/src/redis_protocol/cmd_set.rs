@@ -40,6 +40,9 @@ impl Set {
                 "ex" => {
                     // EX seconds -- Set the specified expire time, in seconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
+                        if set_obj.ttl_state.is_some() {
+                            return Err(Value::Error("ERR syntax error".to_string()));
+                        }
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state =
                                 Some(TTLState::Ttl(time::Duration::from_secs(ttl_u64)));
@@ -53,6 +56,9 @@ impl Set {
                 "px" => {
                     // PX milliseconds -- Set the specified expire time, in milliseconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
+                        if set_obj.ttl_state.is_some() {
+                            return Err(Value::Error("ERR syntax error".to_string()));
+                        }
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state =
                                 Some(TTLState::Ttl(time::Duration::from_millis(ttl_u64)));
@@ -66,6 +72,9 @@ impl Set {
                 "exat" => {
                     // EXAT timestamp-seconds -- Set the specified Unix time at which the key will expire, in seconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
+                        if set_obj.ttl_state.is_some() {
+                            return Err(Value::Error("ERR syntax error".to_string()));
+                        }
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state = Some(TTLState::ExpiredTimestamp(
                                 time::Duration::from_secs(ttl_u64),
@@ -80,6 +89,9 @@ impl Set {
                 "pxat" => {
                     // PXAT timestamp-milliseconds -- Set the specified Unix time at which the key will expire, in milliseconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
+                        if set_obj.ttl_state.is_some() {
+                            return Err(Value::Error("ERR syntax error".to_string()));
+                        }
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state = Some(TTLState::ExpiredTimestamp(
                                 time::Duration::from_millis(ttl_u64),
@@ -95,8 +107,22 @@ impl Set {
                     // KEEPTTL -- Retain the time to live associated with the key.
                     set_obj.ttl_state = Some(TTLState::KeepTTL)
                 }
-                "nx" => set_obj.key_exist_then_insert = Some(false),
-                "xx" => set_obj.key_exist_then_insert = Some(true),
+                "nx" => {
+                    set_obj.key_exist_then_insert = {
+                        if set_obj.key_exist_then_insert.is_some() {
+                            return Err(Value::Error("ERR syntax error".to_string()));
+                        }
+                        Some(false)
+                    }
+                }
+                "xx" => {
+                    set_obj.key_exist_then_insert = {
+                        if set_obj.key_exist_then_insert.is_some() {
+                            return Err(Value::Error("ERR syntax error".to_string()));
+                        }
+                        Some(true)
+                    }
+                }
                 _ => {
                     return Err(Value::Error(format!("{} unknown option", token)));
                 }

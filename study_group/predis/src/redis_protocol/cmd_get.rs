@@ -27,7 +27,7 @@ impl Execution for Get {
         match data.get(&self.key) {
             Some(data_ttl) => {
                 if let Some(v) = data_ttl.get() {
-                    Value::String(v)
+                    Value::Bulk(v)
                 } else {
                     // data expired
                     data.remove(&self.key);

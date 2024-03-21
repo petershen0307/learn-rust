@@ -105,6 +105,9 @@ impl Set {
                 }
                 "keepttl" => {
                     // KEEPTTL -- Retain the time to live associated with the key.
+                    if set_obj.ttl_state.is_some() {
+                        return Err(Value::Error("ERR syntax error".to_string()));
+                    }
                     set_obj.ttl_state = Some(TTLState::KeepTTL)
                 }
                 "nx" => {

@@ -38,7 +38,7 @@ impl RedisProtocolAnalyzer {
                         Err(_) => Value::Error("get data failed".to_string()).encode(),
                     }
                 }
-                Err(e) => e.encode(),
+                Err(e) => Value::Error(e.to_string()).encode(),
             }
         } else {
             Value::Error("decode error".to_string()).encode()
@@ -46,11 +46,12 @@ impl RedisProtocolAnalyzer {
     }
 
     // parse resp array to command and value
-    fn parse(cmd: Vec<Value>) -> Result<Box<dyn Execution + Send>, Value> {
+    fn parse(cmd: Vec<Value>) -> Result<Box<dyn Execution + Send>> {
         // command value or command key value
-        if cmd.len() < 2 {
-            return Result::Err(Value::Error("command parse error".to_string()));
-        }
+        anyhow::ensure!(
+            cmd.len() >= 2,
+            "format should be [some command] [one or more argument]"
+        );
         // convert to Vec<String> then change to VecDeque
         let cmd: Vec<String> = cmd.iter().map(|x| x.to_string()).collect();
         let mut cmd = VecDeque::from(cmd);
@@ -60,7 +61,7 @@ impl RedisProtocolAnalyzer {
             "get" => Ok(cmd_get::Get::parse(cmd)?),
             "del" => Ok(cmd_del::Del::parse(cmd)?),
             "command" => Ok(cmd_command::Command::parse(cmd)?),
-            _ => Result::Err(Value::Error(format!("command {} not support", command))),
+            _ => anyhow::bail!("command {command} not support",),
         }
     }
 }

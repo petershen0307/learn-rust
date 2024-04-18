@@ -12,10 +12,8 @@ pub struct Get {
 }
 
 impl Get {
-    pub fn parse(input: VecDeque<String>) -> Result<Box<Self>, Value> {
-        if input.len() != 1 {
-            return Result::Err(Value::Error("command parse error".to_string()));
-        }
+    pub fn parse(input: VecDeque<String>) -> Result<Box<Self>> {
+        anyhow::ensure!(input.len() == 1, "too many argument for get");
         Ok(Box::new(Get {
             key: input[0].to_owned(),
         }))

@@ -12,7 +12,8 @@ pub struct Del {
 }
 
 impl Del {
-    pub fn parse(input: VecDeque<String>) -> Result<Box<Self>, Value> {
+    pub fn parse(input: VecDeque<String>) -> Result<Box<Self>> {
+        anyhow::ensure!(!input.is_empty(), "at least one argument for del");
         Ok(Box::new(Del { key: input }))
     }
 }

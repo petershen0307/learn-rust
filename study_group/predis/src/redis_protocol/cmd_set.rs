@@ -25,10 +25,8 @@ enum TTLState {
 }
 
 impl Set {
-    pub fn parse(mut input: VecDeque<String>) -> Result<Box<Self>, Value> {
-        if input.len() < 2 {
-            return Result::Err(Value::Error("command parse error".to_string()));
-        }
+    pub fn parse(mut input: VecDeque<String>) -> Result<Box<Self>> {
+        anyhow::ensure!(input.len() >= 2, "at least two argument for set");
         let mut set_obj = Set {
             key: input.pop_front().unwrap(),
             value: input.pop_front().unwrap(),
@@ -40,94 +38,86 @@ impl Set {
                 "ex" => {
                     // EX seconds -- Set the specified expire time, in seconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
-                        if set_obj.ttl_state.is_some() {
-                            return Err(Value::Error("ERR syntax error".to_string()));
-                        }
+                        anyhow::ensure!(set_obj.ttl_state.is_none(), "ttl already be set");
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state =
                                 Some(TTLState::Ttl(time::Duration::from_secs(ttl_u64)));
                         } else {
-                            return Err(Value::Error(format!("{} value is not integer", token)));
+                            anyhow::bail!("{token} value is not integer");
                         }
                     } else {
-                        return Err(Value::Error(format!("{} without value", token)));
+                        anyhow::bail!("{token} without value");
                     }
                 }
                 "px" => {
                     // PX milliseconds -- Set the specified expire time, in milliseconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
-                        if set_obj.ttl_state.is_some() {
-                            return Err(Value::Error("ERR syntax error".to_string()));
-                        }
+                        anyhow::ensure!(set_obj.ttl_state.is_none(), "ttl already be set");
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state =
                                 Some(TTLState::Ttl(time::Duration::from_millis(ttl_u64)));
                         } else {
-                            return Err(Value::Error(format!("{} value is not integer", token)));
+                            anyhow::bail!("{token} value is not integer");
                         }
                     } else {
-                        return Err(Value::Error(format!("{} without value", token)));
+                        anyhow::bail!("{token} without value");
                     }
                 }
                 "exat" => {
                     // EXAT timestamp-seconds -- Set the specified Unix time at which the key will expire, in seconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
-                        if set_obj.ttl_state.is_some() {
-                            return Err(Value::Error("ERR syntax error".to_string()));
-                        }
+                        anyhow::ensure!(set_obj.ttl_state.is_none(), "ttl already be set");
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state = Some(TTLState::ExpiredTimestamp(
                                 time::Duration::from_secs(ttl_u64),
                             ));
                         } else {
-                            return Err(Value::Error(format!("{} value is not integer", token)));
+                            anyhow::bail!("{token} value is not integer");
                         }
                     } else {
-                        return Err(Value::Error(format!("{} without value", token)));
+                        anyhow::bail!("{token} without value");
                     }
                 }
                 "pxat" => {
                     // PXAT timestamp-milliseconds -- Set the specified Unix time at which the key will expire, in milliseconds (a positive integer).
                     if let Some(ttl) = input.pop_front() {
-                        if set_obj.ttl_state.is_some() {
-                            return Err(Value::Error("ERR syntax error".to_string()));
-                        }
+                        anyhow::ensure!(set_obj.ttl_state.is_none(), "ttl already be set");
                         if let Ok(ttl_u64) = ttl.parse::<u64>() {
                             set_obj.ttl_state = Some(TTLState::ExpiredTimestamp(
                                 time::Duration::from_millis(ttl_u64),
                             ));
                         } else {
-                            return Err(Value::Error(format!("{} value is not integer", token)));
+                            anyhow::bail!("{token} value is not integer");
                         }
                     } else {
-                        return Err(Value::Error(format!("{} without value", token)));
+                        anyhow::bail!("{token} without value");
                     }
                 }
                 "keepttl" => {
                     // KEEPTTL -- Retain the time to live associated with the key.
-                    if set_obj.ttl_state.is_some() {
-                        return Err(Value::Error("ERR syntax error".to_string()));
-                    }
+                    anyhow::ensure!(set_obj.ttl_state.is_none(), "ttl already be set");
                     set_obj.ttl_state = Some(TTLState::KeepTTL)
                 }
                 "nx" => {
                     set_obj.key_exist_then_insert = {
-                        if set_obj.key_exist_then_insert.is_some() {
-                            return Err(Value::Error("ERR syntax error".to_string()));
-                        }
+                        anyhow::ensure!(
+                            set_obj.key_exist_then_insert.is_none(),
+                            "nx/xx already be set"
+                        );
                         Some(false)
                     }
                 }
                 "xx" => {
                     set_obj.key_exist_then_insert = {
-                        if set_obj.key_exist_then_insert.is_some() {
-                            return Err(Value::Error("ERR syntax error".to_string()));
-                        }
+                        anyhow::ensure!(
+                            set_obj.key_exist_then_insert.is_none(),
+                            "nx/xx already be set"
+                        );
                         Some(true)
                     }
                 }
                 _ => {
-                    return Err(Value::Error(format!("{} unknown option", token)));
+                    anyhow::bail!("{token} unknown option");
                 }
             }
         }
